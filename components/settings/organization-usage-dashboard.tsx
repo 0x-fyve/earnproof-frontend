@@ -8,12 +8,20 @@ import {
   getUsageLevelTone,
   getUsagePercentage,
   formatUsageResource,
+  getCapacityTrends,
+  getCapacityForecasts,
   type OrganizationUsage,
   type ResourceUsage,
+  type OrganizationCapacityTrends,
+  type OrganizationCapacityForecasts,
+  type CapacityTrendData,
+  type CapacityForecastData,
 } from "@/lib/api/organization-usage";
 import { getOrganizations } from "@/lib/api/organizations";
 import { StatusBadge } from "@/components/common/production-ui";
 import { formatDate, formatDateTime, formatMessage } from "@/lib/i18n";
+import { CapacityTrendChart } from "@/components/charts/capacity-trend-chart";
+import { CapacityForecastChart } from "@/components/charts/capacity-forecast-chart";
 import type { Organization } from "@/lib/api/generated/v1";
 
 const SESSION_KEY = "earnproof.session";
@@ -42,16 +50,23 @@ function readStoredSession(): SessionData | null {
 /** How stale is "stale"? Usage data older than this is flagged in the UI. */
 const STALE_AFTER_MS = 5 * 60 * 1000;
 
+type ViewMode = "current" | "trends" | "forecasts";
+type RegistryDrillDown = string | null;
+
 /**
  * Organization quota and usage dashboard: current usage, configured
  * limits, and reset/window context for API keys, webhooks, proofs, and
  * synchronization, plus request rate limiting (reported separately from
  * quota — see `lib/api/organization-usage.ts`).
  *
- * Server-endpoint status: `/organizations/{id}/usage` does not exist in
- * the current backend. A failed fetch renders an explicit "unavailable"
- * state; it is never rendered as if usage were zero, since those are
- * different situations a user needs to be able to tell apart.
+ * Extended with trend and forecast views showing historical capacity
+ * tracking and projected exhaustion windows. Trends provide historical
+ * context; forecasts estimate when capacity will be exhausted based on
+ * current patterns.
+ *
+ * Server-endpoint status: `/organizations/{id}/usage`, `/organizations/{id}/usage/trends`,
+ * and `/organizations/{id}/usage/forecasts` do not exist in the current backend.
+ * Failed fetches render explicit "unavailable" states.
  */
 export function OrganizationUsageDashboard() {
   const [session] = useState<SessionData | null>(() => readStoredSession());
@@ -59,9 +74,17 @@ export function OrganizationUsageDashboard() {
   const [organizationsError, setOrganizationsError] = useState<string | null>(null);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [usage, setUsage] = useState<OrganizationUsage | null>(null);
+  const [trends, setTrends] = useState<OrganizationCapacityTrends | null>(null);
+  const [forecasts, setForecasts] = useState<OrganizationCapacityForecasts | null>(null);
   const [loading, setLoading] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
+  const [trendsError, setTrendsError] = useState<string | null>(null);
+  const [forecastsError, setForecastsError] = useState<string | null>(null);
   const [usageCheckedAt, setUsageCheckedAt] = useState<number | null>(null);
+  const [trendsCheckedAt, setTrendsCheckedAt] = useState<number | null>(null);
+  const [forecastsCheckedAt, setForecastsCheckedAt] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("current");
+  const [expandedRegistry, setExpandedRegistry] = useState<RegistryDrillDown>(null);
 
   const token = session?.token ?? null;
   const isAdmin = session?.user.role === "ADMIN" || session?.user.role === "ISSUER";
@@ -103,9 +126,6 @@ export function OrganizationUsageDashboard() {
       const controller = new AbortController();
       const result = await getOrganizationUsage(token, selectedOrgId, controller.signal);
       setUsage(result);
-      // Captured here, in an event/effect callback rather than during
-      // render, so the component body stays a pure function of props and
-      // state (no impure Date.now() read in render — see `isStale` below).
       setUsageCheckedAt(Date.now());
     } catch {
       setUsage(null);
@@ -117,25 +137,78 @@ export function OrganizationUsageDashboard() {
     }
   }, [token, selectedOrgId]);
 
+  const loadTrends = useCallback(async () => {
+    if (!token || !selectedOrgId) {
+      return;
+    }
+    setTrendsError(null);
+    try {
+      const controller = new AbortController();
+      const result = await getCapacityTrends(token, selectedOrgId, controller.signal);
+      setTrends(result);
+      setTrendsCheckedAt(Date.now());
+    } catch {
+      setTrends(null);
+      setTrendsError("Capacity trend data could not be loaded.");
+    }
+  }, [token, selectedOrgId]);
+
+  const loadForecasts = useCallback(async () => {
+    if (!token || !selectedOrgId) {
+      return;
+    }
+    setForecastsError(null);
+    try {
+      const controller = new AbortController();
+      const result = await getCapacityForecasts(token, selectedOrgId, controller.signal);
+      setForecasts(result);
+      setForecastsCheckedAt(Date.now());
+    } catch {
+      setForecasts(null);
+      setForecastsError("Capacity forecast data could not be loaded.");
+    }
+  }, [token, selectedOrgId]);
+
   useEffect(() => {
     let active = true;
     void Promise.resolve().then(() => {
       if (active) {
         void loadUsage();
+        void loadTrends();
+        void loadForecasts();
       }
     });
     return () => {
       active = false;
     };
-  }, [loadUsage]);
+  }, [loadUsage, loadTrends, loadForecasts]);
 
-  // Pure function of state: `usageCheckedAt` is captured once per fetch (in
-  // loadUsage, not during render), so this never calls an impure API like
-  // Date.now() from the render body.
+  // Pure function of state: staleness computed from timestamps captured in effect callbacks
   const isStale =
     usage && usageCheckedAt !== null
       ? usageCheckedAt - new Date(usage.generatedAt).getTime() > STALE_AFTER_MS
       : false;
+
+  const isTrendsStale =
+    trends && trendsCheckedAt !== null
+      ? trendsCheckedAt - new Date(trends.generatedAt).getTime() > STALE_AFTER_MS
+      : false;
+
+  const isForecatsStale =
+    forecasts && forecastsCheckedAt !== null
+      ? forecastsCheckedAt - new Date(forecasts.generatedAt).getTime() > STALE_AFTER_MS
+      : false;
+
+  // Mark individual trend points as stale
+  const trendDataWithStaleness = trends
+    ? Object.entries(trends.trends).map(([key, trend]) => ({
+        key,
+        data: {
+          ...trend,
+          isStale: isTrendsStale,
+        } as CapacityTrendData,
+      }))
+    : [];
 
   if (!session) {
     return (
@@ -171,20 +244,26 @@ export function OrganizationUsageDashboard() {
       <section className="grid gap-4 rounded-lg border border-white/10 bg-white/[0.04] p-5">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-xl font-semibold text-white">Usage &amp; Quotas</h2>
+            <h2 className="text-xl font-semibold text-white">Usage, Trends &amp; Forecasts</h2>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              Current usage, configured limits, and reset windows for this organization&apos;s API
-              keys, webhooks, proofs, and payment synchronization.
+              Current usage, historical trends, and projected capacity exhaustion for this organization&apos;s
+              API keys, webhooks, proofs, and payment synchronization.
             </p>
           </div>
-          <button
-            className="h-10 rounded-md border border-white/15 px-4 text-xs font-semibold text-white disabled:opacity-50"
-            disabled={loading || !selectedOrgId}
-            onClick={loadUsage}
-            type="button"
-          >
-            {loading ? "Loading..." : "Refresh"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="h-10 rounded-md border border-white/15 px-4 text-xs font-semibold text-white disabled:opacity-50"
+              disabled={!selectedOrgId}
+              onClick={() => {
+                void loadUsage();
+                void loadTrends();
+                void loadForecasts();
+              }}
+              type="button"
+            >
+              Refresh All
+            </button>
+          </div>
         </div>
 
         {organizationsError && (
@@ -203,7 +282,11 @@ export function OrganizationUsageDashboard() {
             className="mt-1 h-10 w-full max-w-md rounded-md border border-white/10 bg-slate-900 px-3 text-sm text-white disabled:opacity-50"
             disabled={organizations.length === 0}
             id="usage-org-select"
-            onChange={(event) => setSelectedOrgId(event.target.value)}
+            onChange={(event) => {
+              setSelectedOrgId(event.target.value);
+              setViewMode("current");
+              setExpandedRegistry(null);
+            }}
             value={selectedOrgId ?? ""}
           >
             {organizations.length === 0 && <option value="">No organizations available</option>}
@@ -216,59 +299,165 @@ export function OrganizationUsageDashboard() {
         </div>
       </section>
 
-      {usageError && (
-        <div className="rounded-md border border-rose-300/30 bg-rose-300/10 p-4" role="alert">
-          <p className="text-sm text-rose-200">{usageError}</p>
-        </div>
-      )}
+      {/* Tab Navigation */}
+      <div className="flex gap-2 border-b border-white/10">
+        {(
+          [
+            { mode: "current" as const, label: "Current Usage" },
+            { mode: "trends" as const, label: "Trends" },
+            { mode: "forecasts" as const, label: "Forecasts" },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.mode}
+            className={`px-4 py-2 text-sm font-medium border-b-2 ${
+              viewMode === tab.mode
+                ? "border-cyan-300 text-cyan-300"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+            onClick={() => {
+              setViewMode(tab.mode);
+              setExpandedRegistry(null);
+            }}
+            type="button"
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      {loading && !usage && !usageError && (
-        <p className="text-sm text-slate-400">Loading usage data...</p>
-      )}
-
-      {usage && (
-        <section className="grid gap-4">
-          {isStale && (
-            <div className="rounded-md border border-amber-300/30 bg-amber-300/10 p-3" role="status">
-              <p className="text-sm text-amber-100">
-                {formatMessage(
-                  "This usage snapshot is from {generatedAt} and may be out of date. Refresh for current numbers.",
-                  { generatedAt: formatDateTime(usage.generatedAt) }
-                )}
-              </p>
+      {/* Current Usage View */}
+      {viewMode === "current" && (
+        <>
+          {usageError && (
+            <div className="rounded-md border border-rose-300/30 bg-rose-300/10 p-4" role="alert">
+              <p className="text-sm text-rose-200">{usageError}</p>
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {usage.resources.map((resource) => (
-              <UsageCard key={resource.resource} usage={resource} />
-            ))}
-          </div>
+          {loading && !usage && !usageError && (
+            <p className="text-sm text-slate-400">Loading usage data...</p>
+          )}
 
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
-            <h3 className="text-lg font-semibold text-white">Request Rate Limit</h3>
-            <p className="mt-1 text-xs text-slate-400">
-              Rate limiting governs request bursts and is separate from the resource quotas above —
-              you can be under quota and still be rate limited, or vice versa.
-            </p>
-            <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-              <div>
-                <dt className="text-slate-400">Limit</dt>
-                <dd className="text-slate-200">
-                  {formatMessage("{limit} requests / minute", { limit: usage.rateLimit.limitPerMinute })}
-                </dd>
+          {usage && (
+            <section className="grid gap-4">
+              {isStale && (
+                <div className="rounded-md border border-amber-300/30 bg-amber-300/10 p-3" role="status">
+                  <p className="text-sm text-amber-100">
+                    {formatMessage(
+                      "This usage snapshot is from {generatedAt} and may be out of date. Click Refresh All for current numbers.",
+                      { generatedAt: formatDateTime(usage.generatedAt) }
+                    )}
+                  </p>
+                </div>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {usage.resources.map((resource) => (
+                  <UsageCard key={resource.resource} usage={resource} />
+                ))}
               </div>
-              <div>
-                <dt className="text-slate-400">Remaining in window</dt>
-                <dd className="text-slate-200">{usage.rateLimit.remainingInWindow}</dd>
+
+              <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
+                <h3 className="text-lg font-semibold text-white">Request Rate Limit</h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  Rate limiting governs request bursts and is separate from the resource quotas above —
+                  you can be under quota and still be rate limited, or vice versa.
+                </p>
+                <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
+                  <div>
+                    <dt className="text-slate-400">Limit</dt>
+                    <dd className="text-slate-200">
+                      {formatMessage("{limit} requests / minute", {
+                        limit: usage.rateLimit.limitPerMinute,
+                      })}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400">Remaining in window</dt>
+                    <dd className="text-slate-200">{usage.rateLimit.remainingInWindow}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400">Window resets</dt>
+                    <dd className="text-slate-200">{formatDateTime(usage.rateLimit.windowResetAt)}</dd>
+                  </div>
+                </dl>
               </div>
-              <div>
-                <dt className="text-slate-400">Window resets</dt>
-                <dd className="text-slate-200">{formatDateTime(usage.rateLimit.windowResetAt)}</dd>
-              </div>
-            </dl>
-          </div>
-        </section>
+            </section>
+          )}
+        </>
+      )}
+
+      {/* Trends View */}
+      {viewMode === "trends" && (
+        <>
+          {trendsError && (
+            <div className="rounded-md border border-rose-300/30 bg-rose-300/10 p-4" role="alert">
+              <p className="text-sm text-rose-200">{trendsError}</p>
+            </div>
+          )}
+
+          {!trends && !trendsError && (
+            <p className="text-sm text-slate-400">Loading trend data...</p>
+          )}
+
+          {trends && trendDataWithStaleness.length > 0 && (
+            <section className="grid gap-4">
+              {trendDataWithStaleness.map(({ key, data }) => (
+                <div key={key}>
+                  <CapacityTrendChart trend={data} />
+                  {expandedRegistry === key && (
+                    <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.04] p-4">
+                      <p className="text-xs text-slate-400">Drill-down details for {data.displayName}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </section>
+          )}
+
+          {trends && trendDataWithStaleness.length === 0 && (
+            <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
+              <p className="text-sm text-slate-400">No trend data available for this organization.</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Forecasts View */}
+      {viewMode === "forecasts" && (
+        <>
+          {forecastsError && (
+            <div className="rounded-md border border-rose-300/30 bg-rose-300/10 p-4" role="alert">
+              <p className="text-sm text-rose-200">{forecastsError}</p>
+            </div>
+          )}
+
+          {!forecasts && !forecastsError && (
+            <p className="text-sm text-slate-400">Loading forecast data...</p>
+          )}
+
+          {forecasts && Object.entries(forecasts.forecasts).length > 0 && (
+            <section className="grid gap-4">
+              {Object.entries(forecasts.forecasts).map(([key, forecast]) => (
+                <div key={key}>
+                  <CapacityForecastChart forecast={forecast} />
+                  {expandedRegistry === key && (
+                    <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.04] p-4">
+                      <p className="text-xs text-slate-400">Drill-down details for {forecast.displayName}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </section>
+          )}
+
+          {forecasts && Object.entries(forecasts.forecasts).length === 0 && (
+            <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
+              <p className="text-sm text-slate-400">No forecast data available for this organization.</p>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
