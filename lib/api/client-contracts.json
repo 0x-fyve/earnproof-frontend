@@ -92,5 +92,31 @@
     "schema": "ApiError",
     "required": ["statusCode", "code", "message", "requestId"],
     "routes": ["POST /auth/verify"]
+  },
+  {
+    "module": "lib/api/contract-upgrades.ts",
+    "schema": "ContractUpgradeReview",
+    "required": [
+      "id",
+      "metadata",
+      "compatibilityChecks",
+      "blockingFindings",
+      "migrationRequirements",
+      "artifactHashes",
+      "overallStatus"
+    ],
+    "enums": {
+      "overallStatus": ["approved", "pending-review", "rejected", "blocked"],
+      "compatibilityStatus": ["compatible", "incompatible", "unknown", "pending"],
+      "blockingFindingCategory": ["critical", "security", "compatibility", "migration"],
+      "compatibilityCategory": ["abi", "storage", "dependency", "client"]
+    },
+    "routes": [
+      "GET /contract-upgrades/{id}",
+      "GET /contract-upgrades?status=pending-review",
+      "GET /contracts/{address}/upgrades",
+      "POST /contract-upgrades/{id}/approve",
+      "POST /contract-upgrades/{id}/reject"
+    ]
   }
 ]
