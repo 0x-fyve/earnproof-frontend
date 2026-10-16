@@ -421,14 +421,6 @@ export function CreateProofFlow() {
     setProof(null);
     setStatus("Creating signed minimum-income proof...");
 
-    const intent = {
-      selectedPaymentIds: selectedIncomePayments.map((payment) => payment.id),
-      thresholdAmount,
-      assetCode: selectedIncomePayments[0].assetCode,
-      assetIssuer: selectedIncomePayments[0].assetIssuer ?? undefined,
-      periodStart: `${periodStart}T00:00:00.000Z`,
-      periodEnd: `${periodEnd}T23:59:59.000Z`,
-    };
     // A retry of the same intent (same selection, threshold, and period)
     // reuses the previous idempotency key; anything else mints a new one.
     // See lib/proofs/idempotency.ts.

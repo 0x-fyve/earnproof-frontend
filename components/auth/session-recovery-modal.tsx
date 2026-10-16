@@ -88,13 +88,6 @@ export function SessionRecoveryModal({
     }
   }, [onRecover]);
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    // Close on backdrop click, but not on modal content click
-    if (e.target === e.currentTarget) {
-      onDismiss();
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -103,6 +96,8 @@ export function SessionRecoveryModal({
       <div
         className="fixed inset-0 bg-black/50 z-40"
         aria-hidden="true"
+        onClick={onDismiss}
+        role="presentation"
       />
 
       {/* Modal */}

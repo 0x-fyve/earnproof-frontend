@@ -197,9 +197,9 @@ export function NetworkStatusMessage({
  * Hooks to manage network status message state in a component.
  */
 export function useNetworkStatusMessage() {
-  const [error, setError] = useRef<ApiNetworkError | Error | null>(null);
-  const [message, setMessage] = useRef<string>("");
-  const [severity, setSeverity] = useRef<MessageSeverity>("error");
+  const error = useRef<ApiNetworkError | Error | null>(null);
+  const message = useRef<string>("");
+  const severity = useRef<MessageSeverity>("error");
 
   const showError = (err: ApiNetworkError | Error, sev: MessageSeverity = "error") => {
     error.current = err;

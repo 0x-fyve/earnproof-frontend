@@ -46,14 +46,14 @@ export function OrganizationEditForm({
       if (!validationResult.success) {
         const formatted = formatFieldErrors(
           Object.fromEntries(
-            validationResult.error.issues.map((err: any) => [
+            validationResult.error.issues.map((err: { path: (string | number)[]; message: string }) => [
               err.path.join("."),
               err.message,
             ])
           )
         );
         for (const [field, message] of Object.entries(formatted)) {
-          setError(field as any, {
+          setError(field as keyof UpdateOrganizationInput, {
             type: "validate",
             message: typeof message === "string" ? message : "Invalid field",
           });
@@ -80,7 +80,7 @@ export function OrganizationEditForm({
         if (isValidationError(error)) {
           const formatted = formatFieldErrors(error.fieldErrors);
           for (const [field, message] of Object.entries(formatted)) {
-            setError(field as any, {
+            setError(field as keyof UpdateOrganizationInput, {
               type: "server",
               message: typeof message === "string" ? message : "Invalid field",
             });

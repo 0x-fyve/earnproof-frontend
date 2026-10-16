@@ -112,6 +112,9 @@ describe("timezone-disclosing date/time (#151)", () => {
   it("renders an unparseable value as-is instead of throwing", () => {
     expect(() => formatDateTimeWithZone("not-a-date", "en-US")).not.toThrow();
     expect(formatDateTimeWithZone("not-a-date", "en-US")).toBe("not-a-date");
+  });
+});
+
 describe("explicit time zone", () => {
   it("renders a different wall-clock time for a different zone, same instant", () => {
     const tokyo = formatTime(MOMENT, "en-US", { timeZone: "Asia/Tokyo" });

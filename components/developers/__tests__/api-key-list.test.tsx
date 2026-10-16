@@ -11,7 +11,7 @@ import type { ApiKey } from "@/lib/api/generated/v1";
 
 // Mock the OneTimeSecret component to simplify testing
 jest.mock("../one-time-secret", () => ({
-  OneTimeSecret: ({ apiKey, secret, onDismiss }: any) => (
+  OneTimeSecret: ({ apiKey, onDismiss }: { apiKey: { name: string }; onDismiss: () => void }) => (
     <div data-testid="one-time-secret">
       <div>{apiKey.name} - Secret shown</div>
       <button onClick={onDismiss}>Dismiss</button>

@@ -11,9 +11,9 @@ describe("error-normalization", () => {
   describe("normalizeError", () => {
     describe("validation errors (400/422)", () => {
       it("should normalize 400 validation error with field errors", async () => {
-        const error = new Error("HTTP 400: Bad Request");
-        (error as any).statusCode = 400;
-        (error as any).body = JSON.stringify({
+        const error = new Error("HTTP 400: Bad Request") as Error & { statusCode?: number; body?: string };
+        error.statusCode = 400;
+        error.body = JSON.stringify({
           errors: {
             name: "Name is too short",
             website: ["Must be a valid URL"],
@@ -32,9 +32,9 @@ describe("error-normalization", () => {
       });
 
       it("should normalize 422 unprocessable entity", async () => {
-        const error = new Error("HTTP 422");
-        (error as any).statusCode = 422;
-        (error as any).body = JSON.stringify({
+        const error = new Error("HTTP 422") as Error & { statusCode?: number; body?: string };
+        error.statusCode = 422;
+        error.body = JSON.stringify({
           validation_errors: {
             email: "Email already exists",
           },
@@ -48,9 +48,9 @@ describe("error-normalization", () => {
       });
 
       it("should extract message from validation error", async () => {
-        const error = new Error("HTTP 400");
-        (error as any).statusCode = 400;
-        (error as any).body = JSON.stringify({
+        const error = new Error("HTTP 400") as Error & { statusCode?: number; body?: string };
+        error.statusCode = 400;
+        error.body = JSON.stringify({
           message: "Validation failed",
           errors: {},
         });
@@ -63,9 +63,9 @@ describe("error-normalization", () => {
 
     describe("conflict errors (409)", () => {
       it("should normalize 409 conflict error", async () => {
-        const error = new Error("HTTP 409: Conflict");
-        (error as any).statusCode = 409;
-        (error as any).body = JSON.stringify({
+        const error = new Error("HTTP 409: Conflict") as Error & { statusCode?: number; body?: string };
+        error.statusCode = 409;
+        error.body = JSON.stringify({
           message: "Resource was modified by another user",
         });
 
@@ -78,9 +78,9 @@ describe("error-normalization", () => {
       });
 
       it("should use default message for conflict without message field", async () => {
-        const error = new Error("HTTP 409");
-        (error as any).statusCode = 409;
-        (error as any).body = JSON.stringify({});
+        const error = new Error("HTTP 409") as Error & { statusCode?: number; body?: string };
+        error.statusCode = 409;
+        error.body = JSON.stringify({});
 
         const result = await normalizeError(error);
 
@@ -91,8 +91,8 @@ describe("error-normalization", () => {
 
     describe("authorization errors (401/403)", () => {
       it("should normalize 401 unauthorized", async () => {
-        const error = new Error("HTTP 401: Unauthorized");
-        (error as any).statusCode = 401;
+        const error = new Error("HTTP 401: Unauthorized") as Error & { statusCode?: number };
+        error.statusCode = 401;
 
         const result = await normalizeError(error);
 
@@ -103,8 +103,8 @@ describe("error-normalization", () => {
       });
 
       it("should normalize 403 forbidden", async () => {
-        const error = new Error("HTTP 403: Forbidden");
-        (error as any).statusCode = 403;
+        const error = new Error("HTTP 403: Forbidden") as Error & { statusCode?: number };
+        error.statusCode = 403;
 
         const result = await normalizeError(error);
 
@@ -148,8 +148,8 @@ describe("error-normalization", () => {
 
     describe("server errors", () => {
       it("should mark 5xx errors as retryable", async () => {
-        const error = new Error("HTTP 500: Internal Server Error");
-        (error as any).statusCode = 500;
+        const error = new Error("HTTP 500: Internal Server Error") as Error & { statusCode?: number };
+        error.statusCode = 500;
 
         const result = await normalizeError(error);
 
@@ -157,8 +157,8 @@ describe("error-normalization", () => {
       });
 
       it("should mark 4xx errors as non-retryable", async () => {
-        const error = new Error("HTTP 404: Not Found");
-        (error as any).statusCode = 404;
+        const error = new Error("HTTP 404: Not Found") as Error & { statusCode?: number };
+        error.statusCode = 404;
 
         const result = await normalizeError(error);
 
