@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
+import { ContractMigrationStatusBanner } from "@/components/common/contract-migration-banner";
 import { WebVitalsReporter } from "@/components/common/web-vitals-reporter";
 import { PrivacyProvider } from "@/contexts/privacy-context";
 import "./globals.css";
@@ -73,14 +74,13 @@ export default async function RootLayout({
       <body className="flex min-h-full flex-col">
         <PrivacyProvider>
           <WebVitalsReporter />
+          <ContractMigrationStatusBanner />
           {children}
         </PrivacyProvider>
         <script
           nonce={nonce}
           dangerouslySetInnerHTML={{ __html: DISPLAY_PREFERENCES_BOOTSTRAP_SCRIPT }}
         />
-        <WebVitalsReporter />
-        {children}
       </body>
     </html>
   );
