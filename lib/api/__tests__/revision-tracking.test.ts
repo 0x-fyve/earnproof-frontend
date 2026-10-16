@@ -163,8 +163,8 @@ describe("Revision Tracking", () => {
 
       // Original entity should not have revision fields
       expect(Object.keys(entity)).toEqual(originalKeys);
-      expect((entity as any).__revision).toBeUndefined();
-      expect((entity as any).__loadedAt).toBeUndefined();
+      expect((entity as unknown as Record<string, unknown>).__revision).toBeUndefined();
+      expect((entity as unknown as Record<string, unknown>).__loadedAt).toBeUndefined();
 
       // But returned object should have them
       expect(withRevision.__revision).toBeDefined();
@@ -189,16 +189,16 @@ describe("Revision Tracking", () => {
     });
 
     it("returns undefined for missing revision fields", () => {
-      const entity = { id: "org-1", name: "Test Org" };
-      const extracted = extractRevision(entity as any);
+      const entity: Record<string, unknown> = { id: "org-1", name: "Test Org" };
+      const extracted = extractRevision(entity as unknown as { __revision?: string; __loadedAt?: number });
 
       expect(extracted.revision).toBeUndefined();
       expect(extracted.loadedAt).toBeUndefined();
     });
 
     it("handles partial revision info", () => {
-      const entity = { __revision: "rev-123" };
-      const extracted = extractRevision(entity as any);
+      const entity: Record<string, unknown> = { __revision: "rev-123" };
+      const extracted = extractRevision(entity as unknown as { __revision?: string; __loadedAt?: number });
 
       expect(extracted.revision).toBe("rev-123");
       expect(extracted.loadedAt).toBeUndefined();
@@ -224,14 +224,14 @@ describe("Revision Tracking", () => {
     });
 
     it("returns false for Error with statusCode 400", () => {
-      const error = new Error("Bad request");
-      (error as any).statusCode = 400;
+      const error = new Error("Bad request") as Error & { statusCode?: number };
+      error.statusCode = 400;
       expect(isConflictError(error)).toBe(false);
     });
 
     it("returns true for Error with statusCode 409", () => {
-      const error = new Error("Conflict");
-      (error as any).statusCode = 409;
+      const error = new Error("Conflict") as Error & { statusCode?: number };
+      error.statusCode = 409;
       expect(isConflictError(error)).toBe(true);
     });
   });

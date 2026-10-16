@@ -163,8 +163,8 @@ function StatusBadge({
   isExpired: boolean;
   isRevoked: boolean;
 }) {
-  let displayStatus = formatProofStatus(status as any);
-  let badgeClass = getProofStatusColor(status as any);
+  let displayStatus = formatProofStatus(status);
+  let badgeClass = getProofStatusColor(status);
 
   if (isRevoked) {
     displayStatus = "Revoked";

@@ -88,7 +88,7 @@ export function OrganizationDetail({
             </div>
           )}
           <p className="mt-2 text-xs text-slate-500">
-            Organization's public website
+            Organization&apos;s public website
           </p>
         </div>
 

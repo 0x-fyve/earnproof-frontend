@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CreateOrganizationForm } from "./create-organization-form";
 import { OrganizationList } from "./organization-list";
+import { OrganizationEditForm } from "./organization-edit-form";
 import { getOrganizationsPaginated } from "@/lib/api/organizations";
 import { usePagination } from "@/lib/hooks/use-pagination";
 import type { OrganizationWithRevision } from "@/lib/api/organizations";
@@ -12,6 +13,8 @@ export function OrganizationManagement() {
   const [session] = useState<SessionData | null>(() => readStoredSession());
   const [organizations, setOrganizations] = useState<OrganizationWithRevision[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [editingOrgId, setEditingOrgId] = useState<string | null>(null);
+  const [lifecycleAction, setLifecycleAction] = useState<{ action: string; organizationId: string; organizationName: string } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const requestCounterRef = useRef(0);
   const sessionToken = session?.token ?? null;

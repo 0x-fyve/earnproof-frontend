@@ -57,10 +57,11 @@ export function IssuerList({
     issuerName: string;
   } | null>(null);
   const [pendingIssuerName, setPendingIssuerName] = useState<string | null>(null);
-  const recentAuth = useRecentAuth({
-    walletAddress,
-    signMessage: (message) => signWithFreighter(message, walletAddress),
-  });
+  // TODO: Implement useRecentAuth hook and RecentAuthGate component
+  // const recentAuth = useRecentAuth({
+  //   walletAddress,
+  //   signMessage: (message) => signWithFreighter(message, walletAddress),
+  // });
 
   const {
     conflict,
@@ -314,7 +315,9 @@ export function IssuerList({
             if (type === "revoke") {
               setConfirmAction(null);
               setPendingIssuerName(issuerName);
-              recentAuth.requestRecentAuth(runUpdate);
+              // TODO: Uncomment when useRecentAuth is implemented
+              // recentAuth.requestRecentAuth(runUpdate);
+              runUpdate(); // Temporary workaround
             } else {
               runUpdate();
             }
@@ -324,12 +327,14 @@ export function IssuerList({
         />
       )}
 
+      {/* TODO: Uncomment when RecentAuthGate is implemented
       {recentAuth.isPromptOpen && (
         <RecentAuthGate
           recentAuth={recentAuth}
           actionDescription={`revoke the issuer${pendingIssuerName ? ` "${pendingIssuerName}"` : ""}.`}
         />
       )}
+      */}
 
       {conflict.isActive && (
         <ResolveConflictDialog

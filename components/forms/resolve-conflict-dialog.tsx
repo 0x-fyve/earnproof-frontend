@@ -40,7 +40,6 @@ export interface ResolveConflictDialogProps {
  */
 export function ResolveConflictDialog({
   entityType,
-  entityId,
   conflicts,
   localFormState,
   onRetry,
@@ -93,7 +92,7 @@ export function ResolveConflictDialog({
             Update Conflict: {entityType}
           </h2>
           <p id="conflict-dialog-description" className="mt-2 text-sm text-slate-300">
-            This {entityType.toLowerCase()} was modified on the server after you loaded this form. 
+            This {entityType.toLowerCase()} was modified on the server after you loaded this form.&nbsp;
             Review the changes below and decide how to proceed.
           </p>
         </div>
@@ -140,7 +139,7 @@ export function ResolveConflictDialog({
                 ))}
               </div>
               <p className="mt-3 text-xs text-amber-300">
-                Your changes will override the server values if you choose "Retry".
+                Your changes will override the server values if you choose &quot;Retry&quot;.
               </p>
             </div>
           )}
