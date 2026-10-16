@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import { ArtifactExport } from "@/components/proofs/artifact-export";
 import { Timestamp } from "@/components/common/timestamp";
 import { PrintableProofSummary } from "@/components/verification/printable-proof-summary";
+import { ProvenianceChainDisplay } from "@/components/verification/provenance-chain-display";
 import { appConfig } from "@/config/app";
 import { buildCredentialExport, buildVerificationLinkExport } from "@/lib/credentials/export";
+import { hasProvenance } from "@/lib/proofs/provenance-chain";
 import {
   defineMessages,
   formatDateRange,
@@ -154,6 +156,17 @@ export function VerificationPanel({ result }: { result: VerifyProofResponse | nu
                 title="Export verification link"
               />
             </div>
+
+            {/* Provenance chain display when available */}
+            {hasProvenance(result) && result.provenance && (
+              <div className="mt-6 pt-6 border-t border-white/10">
+                <ProvenianceChainDisplay
+                  chain={result.provenance}
+                  title="Verification Source Provenance"
+                  showDetails={false}
+                />
+              </div>
+            )}
           </>
         ) : (
           <p className="mt-5 text-sm leading-6 text-slate-300">

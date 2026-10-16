@@ -583,6 +583,59 @@
           "revokedAt": { "type": "string", "nullable": true }
         }
       },
+      "VerificationSource": {
+        "type": "object",
+        "required": ["id", "type", "status"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the source", "example": "issuer-veridatum-labs" },
+          "type": { "type": "string", "enum": ["issuer", "contract", "stellar_account", "backend_registry"], "description": "Type of verification source" },
+          "status": { "type": "string", "enum": ["verified", "unavailable", "failed"], "description": "Verification status of this source" },
+          "name": { "type": "string", "description": "Human-readable name for the source", "example": "Veridatum Labs Issuer Registry" },
+          "description": { "type": "string", "description": "Detailed explanation of the source", "example": "EarnProof trusted issuer registry" }
+        }
+      },
+      "VerificationObservation": {
+        "type": "object",
+        "required": ["checkpointId", "timestamp", "sourceId", "observationType", "result"],
+        "properties": {
+          "checkpointId": { "type": "string", "description": "Reference to the checkpoint this observation belongs to", "example": "cp-issuer-verification" },
+          "timestamp": { "type": "string", "format": "date-time", "description": "When this observation was made", "example": "2026-08-16T14:32:05.000Z" },
+          "sourceId": { "type": "string", "description": "Which source performed this observation", "example": "issuer-veridatum-labs" },
+          "observationType": { "type": "string", "enum": ["signature_check", "issuer_check", "expiration_check", "revocation_check", "account_check"], "description": "What type of verification was performed" },
+          "result": { "type": "boolean", "description": "True if this observation passed, false if it failed" },
+          "details": { "type": "string", "description": "Optional detailed explanation of the observation result" }
+        }
+      },
+      "VerificationCheckpoint": {
+        "type": "object",
+        "required": ["id", "name", "order"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for this checkpoint", "example": "cp-issuer-verification" },
+          "name": { "type": "string", "description": "Human-readable checkpoint name", "example": "Issuer Verification" },
+          "order": { "type": "integer", "description": "Sequence order in the verification chain (0-indexed)" },
+          "description": { "type": "string", "description": "What this checkpoint verifies", "example": "Verify that the issuer is in the trusted registry" }
+        }
+      },
+      "MissingProvenanceLink": {
+        "type": "object",
+        "required": ["sourceId", "reason"],
+        "properties": {
+          "sourceId": { "type": "string", "description": "Which source is unavailable", "example": "stellar_account" },
+          "reason": { "type": "string", "enum": ["timeout", "network_error", "permission_denied", "not_applicable"], "description": "Why the source is unavailable" },
+          "retryable": { "type": "boolean", "description": "Whether this source might be available if retried" }
+        }
+      },
+      "ProvenianceChain": {
+        "type": "object",
+        "required": ["sources", "checkpoints", "observations", "verificationPath"],
+        "properties": {
+          "sources": { "type": "array", "items": { "$ref": "#/components/schemas/VerificationSource" }, "description": "All sources that contributed to verification" },
+          "checkpoints": { "type": "array", "items": { "$ref": "#/components/schemas/VerificationCheckpoint" }, "description": "Verification steps in order" },
+          "observations": { "type": "array", "items": { "$ref": "#/components/schemas/VerificationObservation" }, "description": "Timestamped observations from each checkpoint" },
+          "verificationPath": { "type": "array", "items": { "type": "string" }, "description": "Ordered list of checkpoints that were executed", "example": ["cp-credential-structure", "cp-issuer-verification", "cp-signature-validation"] },
+          "missingLinks": { "type": "array", "items": { "$ref": "#/components/schemas/MissingProvenanceLink" }, "description": "Sources that could not be verified (empty list if all sources were checked)" }
+        }
+      },
       "VerifyProofResponse": {
         "type": "object",
         "required": ["result", "status"],
@@ -593,7 +646,8 @@
           },
           "status": { "type": "string", "enum": ["valid", "expired", "revoked", "unknown", "invalid"] },
           "credential": { "$ref": "#/components/schemas/SignedCredential" },
-          "proof": { "$ref": "#/components/schemas/ProofSummary" }
+          "proof": { "$ref": "#/components/schemas/ProofSummary" },
+          "provenance": { "$ref": "#/components/schemas/ProvenianceChain", "description": "Verification source provenance chain showing which sources contributed to the verification decision" }
         }
       },
       "ProofCreated": {

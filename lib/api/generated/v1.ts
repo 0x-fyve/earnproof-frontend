@@ -125,11 +125,50 @@ export interface ProofSummary {
   revokedAt?: string | null;
 }
 
+export interface VerificationSource {
+  id: string;
+  type: "issuer" | "contract" | "stellar_account" | "backend_registry";
+  status: "verified" | "unavailable" | "failed";
+  name: string;
+  description?: string;
+}
+
+export interface VerificationObservation {
+  checkpointId: string;
+  timestamp: string;
+  sourceId: string;
+  observationType: "signature_check" | "issuer_check" | "expiration_check" | "revocation_check" | "account_check";
+  result: boolean;
+  details?: string;
+}
+
+export interface VerificationCheckpoint {
+  id: string;
+  name: string;
+  order: number;
+  description?: string;
+}
+
+export interface MissingProvenanceLink {
+  sourceId: string;
+  reason: "timeout" | "network_error" | "permission_denied" | "not_applicable";
+  retryable?: boolean;
+}
+
+export interface ProvenianceChain {
+  sources: VerificationSource[];
+  checkpoints: VerificationCheckpoint[];
+  observations: VerificationObservation[];
+  verificationPath: string[];
+  missingLinks: MissingProvenanceLink[];
+}
+
 export interface VerifyProofResponse {
   result: "VALID" | "EXPIRED" | "REVOKED" | "INVALID_SIGNATURE" | "UNKNOWN_PROOF" | "UNVERIFIED_ISSUER";
   status: "valid" | "expired" | "revoked" | "unknown" | "invalid";
   credential?: SignedCredential;
   proof?: ProofSummary;
+  provenance?: ProvenianceChain;
 }
 
 export interface ProofCreated {

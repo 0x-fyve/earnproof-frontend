@@ -8,7 +8,9 @@ import { PublicShell } from "@/components/layout/public-shell";
 import { ProofLifecycleTimeline } from "@/components/proofs/proof-lifecycle-timeline";
 import { Timestamp } from "@/components/common/timestamp";
 import { PrintableProofSummary } from "@/components/verification/printable-proof-summary";
+import { ProvenianceChainDisplay } from "@/components/verification/provenance-chain-display";
 import { useProofStatusPolling } from "@/lib/proof-status-polling";
+import { hasProvenance } from "@/lib/proofs/provenance-chain";
 import { formatDateRange, formatMessage } from "@/lib/i18n";
 import type { VerifyProofResponse } from "@/lib/api/generated/v1";
 
@@ -214,6 +216,18 @@ function VerificationResult({
                 </li>
               )}
             </ul>
+          </div>
+        )}
+
+        {/* Provenance chain display when available - shown with full details */}
+        {hasProvenance(result) && result.provenance && (
+          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-6">
+            <ProvenianceChainDisplay
+              chain={result.provenance}
+              title="Verification Source Provenance"
+              showDetails={true}
+              expandedByDefault={false}
+            />
           </div>
         )}
 
