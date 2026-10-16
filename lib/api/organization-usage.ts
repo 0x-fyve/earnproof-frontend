@@ -167,3 +167,141 @@ export function getUsagePercentage(usage: Pick<ResourceUsage, "used" | "limit">)
   }
   return Math.min(100, Math.max(0, Math.round((usage.used / usage.limit) * 100)));
 }
+
+/**
+ * Registry types for capacity tracking: issuer (organizations), schema
+ * (credential schemas), and proof (generated proofs/credentials).
+ */
+export const REGISTRY_TYPES = ["ISSUER", "SCHEMA", "PROOF"] as const;
+export type RegistryType = (typeof REGISTRY_TYPES)[number];
+
+/**
+ * A single historical capacity observation for a registry or resource.
+ * Timestamps are ISO 8601 for database/API consistency.
+ */
+export type CapacityTrendPoint = {
+  timestamp: string;
+  /** Units used at this observation time */
+  used: number;
+  /** Configured limit (null for unlimited) */
+  limit: number | null;
+  /** Percentage of capacity (0-100, null for unlimited) */
+  percentageUsed: number | null;
+  /** Registry being tracked (if applicable) */
+  registryType?: RegistryType;
+};
+
+/**
+ * Forecasted capacity projection with confidence bounds.
+ * Estimates are clearly marked as such; no raw private data is exposed.
+ */
+export type CapacityForecast = {
+  /** Point in time being projected */
+  timestamp: string;
+  /** Estimated units consumed at this timestamp */
+  estimatedUsed: number;
+  /** Configured limit (same as current) */
+  limit: number | null;
+  /** Estimated percentage of capacity (0-100, null for unlimited) */
+  estimatedPercentage: number | null;
+  /** Lower bound of projection (confidence interval) */
+  projectionLowerBound: number;
+  /** Upper bound of projection (confidence interval) */
+  projectionUpperBound: number;
+  /** If limit exists and trend indicates exhaustion, the ISO 8601 timestamp when limit will be reached */
+  projectedExhaustionAt?: string;
+  /** Confidence level: "low" (<70%), "medium" (70-85%), "high" (>85%) */
+  confidence: "low" | "medium" | "high";
+};
+
+/**
+ * Historical trend data for a resource or registry type.
+ * Used for rendering bounded trend charts and detecting patterns.
+ */
+export type CapacityTrendData = {
+  /** Resource or registry identifier */
+  identifier: string;
+  /** Human-readable name (e.g., "Proofs", "Issuer Registry") */
+  displayName: string;
+  /** Type of capacity being tracked */
+  type: UsageResource | RegistryType;
+  /** Configured limit (null for unlimited) */
+  limit: number | null;
+  /** Historical observations (ascending by timestamp) */
+  points: CapacityTrendPoint[];
+  /** When this trend data was generated/fetched */
+  generatedAt: string;
+  /** Indicates if data is stale (older than 5 minutes) */
+  isStale: boolean;
+};
+
+/**
+ * Capacity forecast data for projections and exhaustion windows.
+ * Clearly marked as estimates with confidence levels.
+ */
+export type CapacityForecastData = {
+  /** Resource or registry identifier */
+  identifier: string;
+  /** Human-readable name (e.g., "Proofs", "Issuer Registry") */
+  displayName: string;
+  /** Type of capacity being tracked */
+  type: UsageResource | RegistryType;
+  /** Configured limit (null for unlimited) */
+  limit: number | null;
+  /** Most recent observed usage (for chart baseline) */
+  currentUsed: number;
+  /** Forecasted points (ascending by timestamp) */
+  projections: CapacityForecast[];
+  /** When this forecast was generated */
+  generatedAt: string;
+};
+
+/**
+ * Organization capacity trends and forecasts keyed by resource/registry.
+ * Trends provide historical context; forecasts project exhaustion windows.
+ */
+export type OrganizationCapacityTrends = {
+  organizationId: string;
+  /** When this snapshot was generated */
+  generatedAt: string;
+  /** Trends indexed by resource or registry type */
+  trends: Record<string, CapacityTrendData>;
+};
+
+export type OrganizationCapacityForecasts = {
+  organizationId: string;
+  /** When this snapshot was generated */
+  generatedAt: string;
+  /** Forecasts indexed by resource or registry type */
+  forecasts: Record<string, CapacityForecastData>;
+};
+
+export async function getCapacityTrends(
+  token: string,
+  organizationId: string,
+  signal: AbortSignal
+): Promise<OrganizationCapacityTrends> {
+  return retryRead(async (signal) => {
+    return apiClient<OrganizationCapacityTrends>({
+      path: `/organizations/${organizationId}/usage/trends`,
+      method: "GET",
+      headers: bearer(token),
+      signal,
+    });
+  }, signal);
+}
+
+export async function getCapacityForecasts(
+  token: string,
+  organizationId: string,
+  signal: AbortSignal
+): Promise<OrganizationCapacityForecasts> {
+  return retryRead(async (signal) => {
+    return apiClient<OrganizationCapacityForecasts>({
+      path: `/organizations/${organizationId}/usage/forecasts`,
+      method: "GET",
+      headers: bearer(token),
+      signal,
+    });
+  }, signal);
+}
