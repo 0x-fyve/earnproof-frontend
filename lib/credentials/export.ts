@@ -1,6 +1,8 @@
 export const CREDENTIAL_EXPORT_FILENAME = "earnproof-credential.json";
 export const VERIFICATION_LINK_EXPORT_FILENAME = "earnproof-verification-link.txt";
 export const AUDIT_LOG_EXPORT_FILENAME = "earnproof-audit-log.json";
+/** Offline verification bundle (#294). */
+export const OFFLINE_BUNDLE_EXPORT_FILENAME = "earnproof-offline-bundle.json";
 
 const UNSAFE_FILENAME_PATTERN =
   /G[A-Z0-9]{55}|0x[a-fA-F0-9]{8,}|ep[_-][A-Za-z0-9._:-]+|EP-[A-Za-z0-9._:-]+/i;
@@ -120,7 +122,8 @@ export function isSafeExportFilename(filename: string): boolean {
   if (
     filename !== CREDENTIAL_EXPORT_FILENAME &&
     filename !== VERIFICATION_LINK_EXPORT_FILENAME &&
-    filename !== AUDIT_LOG_EXPORT_FILENAME
+    filename !== AUDIT_LOG_EXPORT_FILENAME &&
+    filename !== OFFLINE_BUNDLE_EXPORT_FILENAME
   ) {
     return false;
   }
