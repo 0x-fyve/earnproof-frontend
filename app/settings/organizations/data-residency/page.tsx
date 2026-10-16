@@ -3,6 +3,12 @@ import { pageContainer } from "@/components/common/production-ui";
 import { PublicShell } from "@/components/layout/public-shell";
 import { DataResidencyPolicyPanel } from "@/components/organizations/data-residency-policy-panel";
 
+export const metadata = {
+  title: "Data residency | EarnProof",
+  description:
+    "Review the allowed storage and processing regions for each data class and for background jobs.",
+};
+
 /**
  * Organization data residency policy controls (#277).
  *
