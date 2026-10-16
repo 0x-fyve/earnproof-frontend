@@ -5,6 +5,12 @@ import { PublicShell } from "@/components/layout/public-shell";
 import { OfflineBundleWorkflow } from "@/components/verification/offline-bundle-workflow";
 import { fetchMockOfflineBundleSource } from "@/lib/credentials/offline-bundle";
 
+export const metadata = {
+  title: "Offline verification bundle | EarnProof",
+  description:
+    "Prepare bounded signed evidence, then verify it locally when network access is unavailable.",
+};
+
 /**
  * Offline verification bundle workflow (#294).
  *
