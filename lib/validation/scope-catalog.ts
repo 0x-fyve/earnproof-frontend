@@ -41,7 +41,7 @@ const CATEGORY_BY_SCOPE: Record<ApiKeyScope, ScopeCategory> = {
   "webhooks:manage": "webhooks",
 };
 
-const BROAD_SCOPES: ReadonlySet<ApiKeyScope> = new Set(["proofs:create", "webhooks:manage"]);
+export const BROAD_SCOPES: ReadonlySet<ApiKeyScope> = new Set(["proofs:create", "webhooks:manage"]);
 
 export const CATEGORY_LABELS: Record<ScopeCategory, string> = {
   verification: "Verification",

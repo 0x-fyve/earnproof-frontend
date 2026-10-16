@@ -15,6 +15,11 @@ const navigationItems = [
     description: "Manage issuers and their organizational relationships",
   },
   {
+    name: "Security",
+    href: "/settings/security",
+    description: "Monitor security posture and manage security checks across your organization",
+  },
+  {
     name: "Trusted Sources",
     href: "/settings/trusted-sources",
     description: "Manage trusted sources and their linked issuer identities",
