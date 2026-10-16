@@ -3,6 +3,12 @@ import { pageContainer } from "@/components/common/production-ui";
 import { PublicShell } from "@/components/layout/public-shell";
 import { RoleApprovalPolicyPanel } from "@/components/organizations/role-approval-policy-panel";
 
+export const metadata = {
+  title: "Role approval policy | EarnProof",
+  description:
+    "Configure which organization role changes require independent approval and how long requests stay valid.",
+};
+
 /**
  * Role approval policy configuration (#258).
  *
