@@ -35,6 +35,11 @@ const navigationItems = [
     description: "View and revoke active sessions on other devices",
   },
   {
+    name: "Schema Import",
+    href: "/settings/schemas",
+    description: "Validate schema metadata and policy mappings before importing them into your organization",
+  },
+  {
     name: "Audit Log",
     href: "/settings/audit",
     description: "Filter, verify, and export organization audit records",
