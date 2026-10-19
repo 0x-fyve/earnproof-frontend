@@ -1,25 +1,38 @@
 /**
- * Recent account activity — types, redaction, and a local mock/stub data
- * provider.
+ * Recent account activity: types, redaction, response validation and the
+ * client for the versioned activity endpoint.
  * =================================================================
  *
- * This is a FRONTEND-ONLY feature today. There is no activity/audit-log
- * endpoint in `lib/api/openapi/earnproof-api.v1.json` — `fetchActivityEvents`
- * below is a fixture, not a call to a real backend path. When a real
- * endpoint exists, only the fetcher needs to change: the event shape,
- * redaction contract, and pagination shape are designed to match what a
- * server-provided-pagination endpoint would plausibly return.
+ * Endpoint: `GET /activity` under the versioned API base (`appConfig.apiUrl`,
+ * v1). Query: `limit`, `cursor`, `category`, `outcome`. Auth: bearer token
+ * from the in-memory session. Contract: `lib/api/openapi/earnproof-api.v1.json`
+ * (`ActivityPage`, `ActivityEvent`).
  *
- * Security/privacy contract (per issue #198's acceptance criteria):
- * - Events must already be scoped to the authenticated user/organization
- *   by the server; this module never merges events across sessions.
- * - Sensitive identifiers (IP addresses, session tokens, API key IDs,
- *   wallet addresses) are truncated/omitted by `redactActivityEvent`
- *   before an event is considered renderable — never displayed raw.
- * - An event whose `type` this frontend doesn't recognize must still
- *   render safely (see `components/activity/unknown-event.tsx`) rather
- *   than crash or leak unredacted fields.
+ * Contract this client enforces:
+ * - The server scopes events to the authenticated account and redacts them.
+ *   The client never builds, merges or fills in events: what renders is only
+ *   what the server returned and `parseActivityPage` accepted.
+ * - Only allow-listed fields of a known event are kept. Any extra field the
+ *   server sends (for example a raw IP or a token) is dropped before it can
+ *   reach the UI. The remaining identifiers are masked again by
+ *   `redactActivityEvent`, which is idempotent on already-masked values.
+ * - An event this build cannot render safely (unknown category, unknown
+ *   action, missing or malformed field) becomes `{ id, occurredAt? }` and
+ *   renders as the "unrecognized event" row. Its other fields are discarded.
+ *   Entries with no usable string `id` are dropped and counted.
+ * - Pagination is cursor-based. Cursors are opaque, length-bounded and
+ *   character-restricted; a cursor the server echoes back unchanged ends
+ *   pagination instead of looping.
+ * - Every request carries a fresh `X-Request-Id` (opaque random id, see
+ *   `lib/telemetry/correlation.ts`) that support can match against server logs.
+ *   It is returned with the page and attached to errors, never persisted.
+ * - Requests are cancellable through the caller's `AbortSignal`; an abort is
+ *   not retried and is not reported as a failure.
  */
+
+import { apiClient, bearer, retryRead } from "@/lib/api/client";
+import { ApiError } from "@/lib/errors";
+import { generateCorrelationId } from "@/lib/telemetry/correlation";
 
 export type ActivityOutcome = "success" | "failure" | "pending";
 
@@ -190,158 +203,275 @@ export function redactActivityEvent<T extends ActivityEvent>(event: T): T {
   return masked as T;
 }
 
-const MOCK_PAGE_SIZE = 10;
+/** Smallest and largest page size the client will request. */
+export const ACTIVITY_MIN_PAGE_SIZE = 1;
+export const ACTIVITY_MAX_PAGE_SIZE = 100;
+export const ACTIVITY_DEFAULT_PAGE_SIZE = 20;
+/** Longest cursor the client will send or accept. */
+export const ACTIVITY_MAX_CURSOR_LENGTH = 512;
 
-function buildMockEvents(): KnownActivityEvent[] {
-  const now = Date.now();
-  const hour = 60 * 60 * 1000;
+const CURSOR_PATTERN = /^[A-Za-z0-9_\-.=:~]+$/;
 
-  const raw: KnownActivityEvent[] = [
-    {
-      id: "evt_001",
-      category: "auth",
-      action: "wallet-signature-verified",
-      outcome: "success",
-      occurredAt: new Date(now - 1 * hour).toISOString(),
-      walletAddressMasked: "GABCD1234567890EFGH1234567890IJKL1234567890MNOP",
-      ipAddressMasked: "203.0.113.42",
-      locationLabel: "Lagos, NG",
-    },
-    {
-      id: "evt_002",
-      category: "key",
-      action: "api-key-created",
-      outcome: "success",
-      occurredAt: new Date(now - 3 * hour).toISOString(),
-      apiKeyIdMasked: "key_9f8e7d6c5b4a3210",
-      ipAddressMasked: "203.0.113.42",
-    },
-    {
-      id: "evt_003",
-      category: "session",
-      action: "session-started",
-      outcome: "success",
-      occurredAt: new Date(now - 5 * hour).toISOString(),
-      sessionIdMasked: "sess_1a2b3c4d5e6f7089",
-      ipAddressMasked: "198.51.100.7",
-      locationLabel: "Accra, GH",
-    },
-    {
-      id: "evt_004",
-      category: "auth",
-      action: "wallet-challenge-issued",
-      outcome: "failure",
-      occurredAt: new Date(now - 8 * hour).toISOString(),
-      walletAddressMasked: "GZYXW0987654321UVTS0987654321RQPO0987654321NMLK",
-      ipAddressMasked: "203.0.113.99",
-    },
-    {
-      id: "evt_005",
-      category: "admin",
-      action: "organization-status-changed",
-      outcome: "success",
-      occurredAt: new Date(now - 12 * hour).toISOString(),
-      targetLabel: "Acme Verification Org",
-    },
-    {
-      id: "evt_006",
-      category: "key",
-      action: "api-key-revoked",
-      outcome: "success",
-      occurredAt: new Date(now - 20 * hour).toISOString(),
-      apiKeyIdMasked: "key_11223344556677",
-    },
-    {
-      id: "evt_007",
-      category: "session",
-      action: "session-expired",
-      outcome: "pending",
-      occurredAt: new Date(now - 26 * hour).toISOString(),
-      sessionIdMasked: "sess_aabbccddeeff0011",
-    },
-    {
-      id: "evt_008",
-      category: "auth",
-      action: "sign-out",
-      outcome: "success",
-      occurredAt: new Date(now - 30 * hour).toISOString(),
-      walletAddressMasked: "GABCD1234567890EFGH1234567890IJKL1234567890MNOP",
-      ipAddressMasked: "203.0.113.42",
-    },
-    {
-      id: "evt_009",
-      category: "admin",
-      action: "issuer-suspended",
-      outcome: "failure",
-      occurredAt: new Date(now - 40 * hour).toISOString(),
-      targetLabel: "Suspicious Issuer LLC",
-    },
-    {
-      id: "evt_010",
-      category: "key",
-      action: "api-key-rotated",
-      outcome: "success",
-      occurredAt: new Date(now - 50 * hour).toISOString(),
-      apiKeyIdMasked: "key_deadbeefcafebabe",
-    },
-    {
-      id: "evt_011",
-      category: "session",
-      action: "session-refreshed",
-      outcome: "success",
-      occurredAt: new Date(now - 60 * hour).toISOString(),
-      sessionIdMasked: "sess_0011223344556677",
-    },
-    {
-      id: "evt_012",
-      category: "admin",
-      action: "issuer-approved",
-      outcome: "success",
-      occurredAt: new Date(now - 70 * hour).toISOString(),
-      targetLabel: "Trusted Issuer Co",
-    },
-  ];
+export type ActivityErrorKind =
+  | "invalid-request"
+  | "unauthorized"
+  | "forbidden"
+  | "unavailable"
+  | "invalid-response"
+  | "failed";
 
-  return raw;
+/**
+ * Failure from the activity client. `kind` drives deterministic UI states,
+ * `requestId` is the correlation id sent with the request (safe to show).
+ */
+export class ActivityRequestError extends Error {
+  readonly kind: ActivityErrorKind;
+  readonly requestId: string;
+
+  constructor(kind: ActivityErrorKind, requestId: string, message: string) {
+    super(message);
+    this.name = "ActivityRequestError";
+    this.kind = kind;
+    this.requestId = requestId;
+  }
+}
+
+export type FetchActivityOptions = {
+  /** Bearer token from the in-memory session. */
+  token: string;
+  signal: AbortSignal;
+  cursor?: string | null;
+  filter?: ActivityFilter;
+  limit?: number;
+};
+
+export type FetchedActivityPage = ActivityPage & {
+  /** Correlation id sent as `X-Request-Id` for this request. */
+  requestId: string;
+  /** Entries the server returned that had no usable `id` and were dropped. */
+  droppedCount: number;
+};
+
+export function isValidActivityCursor(cursor: unknown): cursor is string {
+  return (
+    typeof cursor === "string" &&
+    cursor.length > 0 &&
+    cursor.length <= ACTIVITY_MAX_CURSOR_LENGTH &&
+    CURSOR_PATTERN.test(cursor)
+  );
 }
 
 /**
- * Local mock/stub activity feed, paginated server-provided-style with an
- * opaque cursor (here: the last event id emitted). Filters are applied as
- * if the server had already scoped and filtered the result — this mirrors
- * how a real endpoint would take `category`/`outcome` query params rather
- * than the client filtering an unbounded local list.
+ * Builds the query string. Throws `invalid-request` for anything outside the
+ * documented ranges instead of sending it and hoping the server rejects it.
  */
-export async function fetchActivityEvents(
-  options: { cursor?: string | null; filter?: ActivityFilter } = {},
-): Promise<ActivityPage> {
-  const all = buildMockEvents().filter((event) => {
-    if (options.filter?.category && event.category !== options.filter.category) {
-      return false;
-    }
-    if (options.filter?.outcome && event.outcome !== options.filter.outcome) {
-      return false;
-    }
-    return true;
-  });
+export function buildActivityQuery(
+  options: Pick<FetchActivityOptions, "cursor" | "filter" | "limit">,
+  requestId = "",
+): string {
+  const params = new URLSearchParams();
+  const limit = options.limit ?? ACTIVITY_DEFAULT_PAGE_SIZE;
 
-  const startIndex = options.cursor
-    ? all.findIndex((event) => event.id === options.cursor) + 1
-    : 0;
+  if (
+    !Number.isInteger(limit) ||
+    limit < ACTIVITY_MIN_PAGE_SIZE ||
+    limit > ACTIVITY_MAX_PAGE_SIZE
+  ) {
+    throw new ActivityRequestError(
+      "invalid-request",
+      requestId,
+      `Page size must be a whole number from ${ACTIVITY_MIN_PAGE_SIZE} to ${ACTIVITY_MAX_PAGE_SIZE}.`,
+    );
+  }
+  params.set("limit", String(limit));
 
-  // An unrecognized/expired cursor resolves to "no more events" rather
-  // than silently restarting from the top — restarting could look like
-  // duplicate/looping pagination to the caller.
-  if (options.cursor && startIndex === 0) {
-    return { events: [], nextCursor: null };
+  const { category, outcome } = options.filter ?? {};
+  if (category !== undefined) {
+    if (!ACTIVITY_CATEGORIES.includes(category)) {
+      throw new ActivityRequestError("invalid-request", requestId, "Unknown activity category filter.");
+    }
+    params.set("category", category);
+  }
+  if (outcome !== undefined) {
+    if (!ACTIVITY_OUTCOMES.includes(outcome)) {
+      throw new ActivityRequestError("invalid-request", requestId, "Unknown activity outcome filter.");
+    }
+    params.set("outcome", outcome);
   }
 
-  const pageEvents = all.slice(startIndex, startIndex + MOCK_PAGE_SIZE);
-  const nextCursor =
-    startIndex + MOCK_PAGE_SIZE < all.length ? pageEvents[pageEvents.length - 1]?.id ?? null : null;
+  if (options.cursor !== undefined && options.cursor !== null) {
+    if (!isValidActivityCursor(options.cursor)) {
+      throw new ActivityRequestError("invalid-request", requestId, "Invalid pagination cursor.");
+    }
+    params.set("cursor", options.cursor);
+  }
 
-  return {
-    events: pageEvents.map((event) => redactActivityEvent(event)),
-    nextCursor,
+  return `?${params.toString()}`;
+}
+
+const AUTH_ACTIONS = ["wallet-challenge-issued", "wallet-signature-verified", "sign-out"];
+const KEY_ACTIONS = ["api-key-created", "api-key-rotated", "api-key-revoked"];
+const SESSION_ACTIONS = ["session-started", "session-refreshed", "session-expired"];
+const ADMIN_ACTIONS = ["organization-status-changed", "issuer-approved", "issuer-suspended"];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function validTimestamp(value: unknown): string | null {
+  const text = nonEmptyString(value);
+  return text !== null && !Number.isNaN(Date.parse(text)) ? text : null;
+}
+
+/** The only shape an unrenderable event is allowed to keep. */
+function toUnknownEvent(id: string, raw: Record<string, unknown>): ActivityEvent {
+  const occurredAt = validTimestamp(raw.occurredAt);
+  return occurredAt ? { id, occurredAt } : { id };
+}
+
+/**
+ * Validates one wire event. Returns a known event built only from
+ * allow-listed fields, an unknown-event stub, or null when there is no usable id.
+ */
+export function parseActivityEvent(raw: unknown): ActivityEvent | null {
+  if (!isRecord(raw)) return null;
+  const id = nonEmptyString(raw.id);
+  if (id === null) return null;
+
+  const occurredAt = validTimestamp(raw.occurredAt);
+  const outcome = ACTIVITY_OUTCOMES.find((value) => value === raw.outcome);
+  const category = ACTIVITY_CATEGORIES.find((value) => value === raw.category);
+  if (!occurredAt || !outcome || !category) return toUnknownEvent(id, raw);
+
+  const base = {
+    id,
+    occurredAt,
+    outcome,
+    ...(nonEmptyString(raw.ipAddressMasked) ? { ipAddressMasked: raw.ipAddressMasked as string } : {}),
+    ...(nonEmptyString(raw.locationLabel) ? { locationLabel: raw.locationLabel as string } : {}),
   };
+
+  const action = nonEmptyString(raw.action);
+  if (!action) return toUnknownEvent(id, raw);
+
+  switch (category) {
+    case "auth": {
+      const wallet = nonEmptyString(raw.walletAddressMasked);
+      if (!wallet || !AUTH_ACTIONS.includes(action)) return toUnknownEvent(id, raw);
+      return redactActivityEvent({ ...base, category, action: action as AuthActivityEvent["action"], walletAddressMasked: wallet });
+    }
+    case "key": {
+      const keyId = nonEmptyString(raw.apiKeyIdMasked);
+      if (!keyId || !KEY_ACTIONS.includes(action)) return toUnknownEvent(id, raw);
+      return redactActivityEvent({ ...base, category, action: action as KeyActivityEvent["action"], apiKeyIdMasked: keyId });
+    }
+    case "session": {
+      const sessionId = nonEmptyString(raw.sessionIdMasked);
+      if (!sessionId || !SESSION_ACTIONS.includes(action)) return toUnknownEvent(id, raw);
+      return redactActivityEvent({ ...base, category, action: action as SessionActivityEvent["action"], sessionIdMasked: sessionId });
+    }
+    case "admin": {
+      const target = nonEmptyString(raw.targetLabel);
+      if (!target || !ADMIN_ACTIONS.includes(action)) return toUnknownEvent(id, raw);
+      return redactActivityEvent({ ...base, category, action: action as AdminActivityEvent["action"], targetLabel: target });
+    }
+  }
+}
+
+/**
+ * Validates a whole page. Throws `invalid-response` when the envelope itself
+ * is malformed. Duplicate ids inside one page keep the first occurrence.
+ */
+export function parseActivityPage(
+  raw: unknown,
+  requestId: string,
+  requestCursor: string | null = null,
+): FetchedActivityPage {
+  if (!isRecord(raw) || !Array.isArray(raw.events)) {
+    throw new ActivityRequestError("invalid-response", requestId, "Activity response was malformed.");
+  }
+
+  let nextCursor: string | null;
+  if (raw.nextCursor === null || raw.nextCursor === undefined) {
+    nextCursor = null;
+  } else if (isValidActivityCursor(raw.nextCursor)) {
+    // A server that hands back the cursor it was given would loop forever.
+    nextCursor = raw.nextCursor === requestCursor ? null : raw.nextCursor;
+  } else {
+    throw new ActivityRequestError("invalid-response", requestId, "Activity response had an invalid cursor.");
+  }
+
+  const seen = new Set<string>();
+  const events: ActivityEvent[] = [];
+  let droppedCount = 0;
+  for (const entry of raw.events) {
+    const event = parseActivityEvent(entry);
+    if (!event) {
+      droppedCount += 1;
+    } else if (!seen.has(event.id)) {
+      seen.add(event.id);
+      events.push(event);
+    }
+  }
+
+  return { events, nextCursor, requestId, droppedCount };
+}
+
+function toRequestError(error: unknown, requestId: string): ActivityRequestError {
+  if (error instanceof ActivityRequestError) return error;
+  if (error instanceof ApiError) {
+    switch (error.status) {
+      case 401:
+        return new ActivityRequestError("unauthorized", requestId, "Your session has ended.");
+      case 403:
+        return new ActivityRequestError("forbidden", requestId, "You do not have access to account activity.");
+      case 404:
+      case 501:
+        return new ActivityRequestError("unavailable", requestId, "Account activity is not available.");
+      case 400:
+      case 422:
+        return new ActivityRequestError("invalid-request", requestId, "The activity request was rejected.");
+      default:
+        return new ActivityRequestError("failed", requestId, "Unable to load recent activity.");
+    }
+  }
+  return new ActivityRequestError("failed", requestId, "Unable to load recent activity.");
+}
+
+/**
+ * Fetches one page of the signed-in account's activity from the live API.
+ * Never returns generated or fallback events: on any failure it throws.
+ * An aborted request rethrows the original `AbortError` so callers can ignore it.
+ */
+export async function fetchActivityEvents(options: FetchActivityOptions): Promise<FetchedActivityPage> {
+  const requestId = generateCorrelationId();
+
+  try {
+    if (!options.token) {
+      throw new ActivityRequestError("unauthorized", requestId, "Your session has ended.");
+    }
+    const query = buildActivityQuery(options, requestId);
+
+    const raw = await retryRead(
+      (signal) =>
+        apiClient<unknown>({
+          path: `/activity${query}`,
+          method: "GET",
+          headers: { ...bearer(options.token), "X-Request-Id": requestId },
+          signal,
+        }),
+      options.signal,
+    );
+
+    return parseActivityPage(raw, requestId, options.cursor ?? null);
+  } catch (error) {
+    if (options.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+      throw error;
+    }
+    throw toRequestError(error, requestId);
+  }
 }

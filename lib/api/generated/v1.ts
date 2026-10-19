@@ -220,6 +220,25 @@ export interface Webhook {
   status: "ACTIVE" | "DISABLED";
 }
 
+export interface ActivityEvent {
+  id: string;
+  category: "auth" | "key" | "session" | "admin";
+  action: string;
+  outcome: "success" | "failure" | "pending";
+  occurredAt: string;
+  ipAddressMasked?: string;
+  locationLabel?: string;
+  walletAddressMasked?: string;
+  apiKeyIdMasked?: string;
+  sessionIdMasked?: string;
+  targetLabel?: string;
+}
+
+export interface ActivityPage {
+  events: Array<ActivityEvent>;
+  nextCursor: string | null;
+}
+
 export interface ApiError {
   statusCode: number;
   code: "VALIDATION_ERROR" | "INVALID_INPUT" | "MISSING_TOKEN" | "INVALID_TOKEN" | "EXPIRED_TOKEN" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "FORBIDDEN" | "NOT_FOUND" | "PAYMENT_NOT_FOUND" | "PAYMENT_NOT_ELIGIBLE" | "PAYMENT_EXCLUDED" | "CONFLICT" | "TOO_MANY_REQUESTS" | "DEPENDENCY_UNAVAILABLE" | "INTERNAL_ERROR";

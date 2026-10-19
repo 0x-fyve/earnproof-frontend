@@ -118,5 +118,21 @@
       "POST /contract-upgrades/{id}/approve",
       "POST /contract-upgrades/{id}/reject"
     ]
+  },
+  {
+    "module": "lib/api/activity.ts",
+    "schema": "ActivityPage",
+    "required": ["events", "nextCursor"],
+    "routes": ["GET /activity"]
+  },
+  {
+    "module": "lib/api/activity.ts",
+    "schema": "ActivityEvent",
+    "required": ["id", "category", "action", "outcome", "occurredAt"],
+    "enums": {
+      "category": ["auth", "key", "session", "admin"],
+      "outcome": ["success", "failure", "pending"]
+    },
+    "routes": ["GET /activity"]
   }
 ]

@@ -377,6 +377,29 @@
         }
       }
     },
+    "/activity": {
+      "get": {
+        "tags": ["activity"],
+        "operationId": "listActivity",
+        "description": "Recent activity for the authenticated account, newest first, already scoped and redacted by the server. Cursors are opaque (1 to 512 characters from A-Z a-z 0-9 _ - . = : ~). A response that repeats the request cursor ends pagination. Clients send X-Request-Id, an opaque random id, for support correlation.",
+        "parameters": [
+          { "name": "limit", "in": "query", "required": false, "description": "Page size.", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } },
+          { "name": "cursor", "in": "query", "required": false, "description": "Opaque cursor from a previous page's nextCursor.", "schema": { "type": "string", "minLength": 1, "maxLength": 512 } },
+          { "name": "category", "in": "query", "required": false, "description": "Only events in this category.", "schema": { "type": "string", "enum": ["auth", "key", "session", "admin"] } },
+          { "name": "outcome", "in": "query", "required": false, "description": "Only events with this outcome.", "schema": { "type": "string", "enum": ["success", "failure", "pending"] } },
+          { "name": "X-Request-Id", "in": "header", "required": false, "description": "Opaque client-generated correlation id.", "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activity page",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ActivityPage" } } }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
     "/webhooks": {
       "post": {
         "tags": ["webhooks"],
@@ -721,6 +744,32 @@
           "url": { "type": "string", "example": "https://example.invalid/webhooks/earnproof" },
           "events": { "type": "array", "items": { "type": "string" } },
           "status": { "type": "string", "enum": ["ACTIVE", "DISABLED"] }
+        }
+      },
+      "ActivityEvent": {
+        "type": "object",
+        "required": ["id", "category", "action", "outcome", "occurredAt"],
+        "description": "Redacted activity event. Only the masked field matching the category is present. Unknown categories or actions may appear and are shown as an unrecognized event.",
+        "properties": {
+          "id": { "type": "string", "example": "evt_001" },
+          "category": { "type": "string", "enum": ["auth", "key", "session", "admin"] },
+          "action": { "type": "string", "example": "wallet-signature-verified" },
+          "outcome": { "type": "string", "enum": ["success", "failure", "pending"] },
+          "occurredAt": { "type": "string", "format": "date-time", "example": "2026-01-02T03:04:05.000Z" },
+          "ipAddressMasked": { "type": "string", "example": "203.0.113.0" },
+          "locationLabel": { "type": "string", "example": "Lagos, NG" },
+          "walletAddressMasked": { "type": "string", "example": "GABC•••MNOP" },
+          "apiKeyIdMasked": { "type": "string", "example": "key_•••3210" },
+          "sessionIdMasked": { "type": "string", "example": "sess•••7089" },
+          "targetLabel": { "type": "string", "example": "Synthetic Issuer Co" }
+        }
+      },
+      "ActivityPage": {
+        "type": "object",
+        "required": ["events", "nextCursor"],
+        "properties": {
+          "events": { "type": "array", "items": { "$ref": "#/components/schemas/ActivityEvent" } },
+          "nextCursor": { "type": "string", "nullable": true }
         }
       },
       "ApiError": {
