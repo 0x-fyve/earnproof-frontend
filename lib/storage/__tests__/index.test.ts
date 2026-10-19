@@ -41,169 +41,106 @@ class MockStorageDriver implements StorageDriver {
 
 describe('Storage Utilities', () => {
   let mockDriver: MockStorageDriver;
-  
+
+  const draft = (name: string) => ({
+    data: { [name]: { savedAt: '2026-01-01T00:00:00.000Z', values: { note: 'synthetic' } } },
+  });
+
   beforeEach(() => {
     mockDriver = new MockStorageDriver();
   });
-  
+
   afterEach(() => {
     mockDriver.clear();
   });
-  
+
+  describe('Registered keys', () => {
+    it('does not register a bearer token session key', () => {
+      expect(Object.keys(STORAGE_KEYS)).not.toContain('SESSION');
+      expect(Object.values(STORAGE_KEYS)).not.toContain('earnproof.session');
+    });
+  });
+
   describe('Basic storage operations', () => {
     it('should store and retrieve values', () => {
-      const sessionData = {
-        data: {
-          token: 'test-token-123',
-          user: {
-            id: 'user-123',
-            walletAddress: 'GABCDEF...',
-            email: 'test@example.com',
-          },
-        },
-      };
-      
-      setStorageValue('SESSION', sessionData, mockDriver);
-      
-      const retrieved = getStorageValue('SESSION', mockDriver);
+      setStorageValue('FORM_DRAFTS', draft('create-proof-flow'), mockDriver);
+
+      const retrieved = getStorageValue('FORM_DRAFTS', mockDriver);
       expect(retrieved).toBeTruthy();
-      expect(retrieved?.version).toBe(CURRENT_VERSIONS.SESSION);
-      expect(retrieved?.key).toBe('SESSION');
-      expect(retrieved?.data.token).toBe('test-token-123');
-      expect(retrieved?.data.user.walletAddress).toBe('GABCDEF...');
+      expect(retrieved?.version).toBe(CURRENT_VERSIONS.FORM_DRAFTS);
+      expect(retrieved?.key).toBe('FORM_DRAFTS');
+      expect(retrieved?.data['create-proof-flow']?.values).toEqual({ note: 'synthetic' });
     });
-    
+
     it('should handle null when value does not exist', () => {
-      const retrieved = getStorageValue('SESSION', mockDriver);
-      expect(retrieved).toBeNull();
+      expect(getStorageValue('FORM_DRAFTS', mockDriver)).toBeNull();
     });
-    
+
     it('should remove values', () => {
-      setStorageValue('SESSION', {
-        data: {
-          token: 'test',
-          user: { id: '1', walletAddress: 'G...' },
-        },
-      }, mockDriver);
-      
-      removeStorageValue('SESSION', mockDriver);
-      
-      const retrieved = getStorageValue('SESSION', mockDriver);
-      expect(retrieved).toBeNull();
+      setStorageValue('FORM_DRAFTS', draft('a'), mockDriver);
+
+      removeStorageValue('FORM_DRAFTS', mockDriver);
+
+      expect(getStorageValue('FORM_DRAFTS', mockDriver)).toBeNull();
     });
-    
+
     it('should clear all storage', () => {
-      setStorageValue('SESSION', {
-        data: {
-          token: 'test',
-          user: { id: '1', walletAddress: 'G...' },
-        },
-      }, mockDriver);
-      
+      setStorageValue('FORM_DRAFTS', draft('a'), mockDriver);
+      setStorageValue(
+        'DISPLAY_PREFERENCES',
+        { data: { reducedMotion: 'enabled', highContrast: 'system' } },
+        mockDriver
+      );
+
       clearAllStorage(mockDriver);
-      
-      const store = mockDriver.getStore();
-      expect(Object.keys(store)).toHaveLength(0);
+
+      expect(Object.keys(mockDriver.getStore())).toHaveLength(0);
     });
   });
-  
+
   describe('Migration support', () => {
-    it('should migrate legacy session format', () => {
-      // Legacy format without version
-      const legacySession = {
-        token: 'legacy-token',
-        user: {
-          id: 'legacy-user',
-          walletAddress: 'GLEGACY...',
-        },
-      };
-      
-      mockDriver.setItem('SESSION', JSON.stringify(legacySession));
-      
-      const migrated = getStorageValue('SESSION', mockDriver);
-      expect(migrated).toBeTruthy();
-      expect(migrated?.version).toBe(1);
-      expect(migrated?.data.token).toBe('legacy-token');
-      expect(migrated?.data.user.walletAddress).toBe('GLEGACY...');
-      
-      // Verify migrated value was saved back
-      const stored = JSON.parse(mockDriver.getItem('SESSION')!);
-      expect(stored.version).toBe(1);
+    it('should discard unversioned legacy values because no migration path exists', () => {
+      mockDriver.setItem('FORM_DRAFTS', JSON.stringify({ a: { savedAt: 'x', values: {} } }));
+
+      expect(getStorageValue('FORM_DRAFTS', mockDriver)).toBeNull();
+      expect(mockDriver.getItem('FORM_DRAFTS')).toBeNull();
     });
-    
+
+    it('should never migrate a legacy bearer-token shape into a registered key', () => {
+      mockDriver.setItem(
+        'FORM_DRAFTS',
+        JSON.stringify({ token: 'legacy-token', user: { id: 'u', walletAddress: 'G...' } })
+      );
+
+      expect(getStorageValue('FORM_DRAFTS', mockDriver)).toBeNull();
+      expect(mockDriver.getItem('FORM_DRAFTS')).toBeNull();
+    });
+
     it('should reject corrupted data', () => {
-      mockDriver.setItem('SESSION', 'not json at all');
-      
-      const result = getStorageValue('SESSION', mockDriver);
-      expect(result).toBeNull();
-      
-      // Corrupted data should be removed
-      const stored = mockDriver.getItem('SESSION');
-      expect(stored).toBeNull();
+      mockDriver.setItem('FORM_DRAFTS', 'not json at all');
+
+      expect(getStorageValue('FORM_DRAFTS', mockDriver)).toBeNull();
+      expect(mockDriver.getItem('FORM_DRAFTS')).toBeNull();
     });
-    
+
     it('should reject unknown version format', () => {
-      // Version 999 doesn't exist
-      const unknownVersion = {
-        version: 999,
-        data: { token: 'test', user: { id: '1', walletAddress: 'G...' } },
-      };
-      
-      mockDriver.setItem('SESSION', JSON.stringify(unknownVersion));
-      
-      const result = getStorageValue('SESSION', mockDriver);
-      expect(result).toBeNull();
-      
-      // Unknown version data should be removed
-      const stored = mockDriver.getItem('SESSION');
-      expect(stored).toBeNull();
+      mockDriver.setItem('FORM_DRAFTS', JSON.stringify({ version: 999, data: {} }));
+
+      expect(getStorageValue('FORM_DRAFTS', mockDriver)).toBeNull();
+      expect(mockDriver.getItem('FORM_DRAFTS')).toBeNull();
+    });
+
+    it('should accept the exact current version and reject one version ahead', () => {
+      const current = CURRENT_VERSIONS.FORM_DRAFTS;
+      mockDriver.setItem('FORM_DRAFTS', JSON.stringify({ version: current, data: {} }));
+      expect(getStorageValue('FORM_DRAFTS', mockDriver)).toBeTruthy();
+
+      mockDriver.setItem('FORM_DRAFTS', JSON.stringify({ version: current + 1, data: {} }));
+      expect(getStorageValue('FORM_DRAFTS', mockDriver)).toBeNull();
+      expect(mockDriver.getItem('FORM_DRAFTS')).toBeNull();
     });
   });
-  
-  describe('Privacy and security', () => {
-    it('should not store sensitive information in plain text', () => {
-      const sessionData = {
-        data: {
-          token: 'sensitive-jwt-token.abc.xyz',
-          user: {
-            id: 'user-123',
-            walletAddress: 'GPRIVATE...',
-            email: 'private@example.com',
-          },
-        },
-      };
-      
-      setStorageValue('SESSION', sessionData, mockDriver);
-      
-      const stored = mockDriver.getStore()[STORAGE_KEYS.SESSION];
-      expect(stored).toBeTruthy();
-      
-      // Verify the stored value is JSON, not plain text exposure
-      const parsed = JSON.parse(stored);
-      expect(parsed.version).toBeDefined();
-      expect(parsed.key).toBe('SESSION');
-      
-      // The actual sensitive data should be there but properly structured
-      expect(parsed.data.token).toBe('sensitive-jwt-token.abc.xyz');
-      expect(parsed.data.user.walletAddress).toBe('GPRIVATE...');
-    });
-    
-    it('should clear session on logout simulation', () => {
-      setStorageValue('SESSION', {
-        data: {
-          token: 'login-token',
-          user: { id: 'user-1', walletAddress: 'GLOGIN...' },
-        },
-      }, mockDriver);
-      
-      // Simulate logout
-      removeStorageValue('SESSION', mockDriver);
-      
-      const retrieved = getStorageValue('SESSION', mockDriver);
-      expect(retrieved).toBeNull();
-    });
-  });
-  
+
   describe('DISPLAY_PREFERENCES', () => {
     it('should store and retrieve display preferences', () => {
       setStorageValue(
@@ -247,69 +184,51 @@ describe('Storage Utilities', () => {
   describe('Storage statistics', () => {
     it('should provide storage statistics', () => {
       const stats1 = getStorageStats(mockDriver);
-      expect(stats1[STORAGE_KEYS.SESSION].exists).toBe(false);
-      
-      setStorageValue('SESSION', {
-        data: {
-          token: 'stats-token',
-          user: { id: 'stats-user', walletAddress: 'GSTATS...' },
-        },
-      }, mockDriver);
-      
+      expect(stats1[STORAGE_KEYS.FORM_DRAFTS].exists).toBe(false);
+
+      setStorageValue('FORM_DRAFTS', draft('stats'), mockDriver);
+
       const stats2 = getStorageStats(mockDriver);
-      expect(stats2[STORAGE_KEYS.SESSION].exists).toBe(true);
-      expect(stats2[STORAGE_KEYS.SESSION].version).toBe(1);
-      expect(stats2[STORAGE_KEYS.SESSION].size).toBeGreaterThan(0);
+      expect(stats2[STORAGE_KEYS.FORM_DRAFTS].exists).toBe(true);
+      expect(stats2[STORAGE_KEYS.FORM_DRAFTS].version).toBe(1);
+      expect(stats2[STORAGE_KEYS.FORM_DRAFTS].size).toBeGreaterThan(0);
     });
   });
-  
+
   describe('Real localStorage driver', () => {
     // Skip in Node.js environment
     const isBrowser = typeof window !== 'undefined' && window.localStorage;
-    
+
     if (isBrowser) {
       beforeEach(() => {
         localStorage.clear();
       });
-      
+
       afterEach(() => {
         localStorage.clear();
       });
-      
+
       it('should work with real localStorage', () => {
-        setStorageValue('SESSION', {
-          data: {
-            token: 'real-token',
-            user: { id: 'real-user', walletAddress: 'GREAL...' },
-          },
-        });
-        
-        const retrieved = getStorageValue('SESSION');
+        setStorageValue('FORM_DRAFTS', draft('real'));
+
+        const retrieved = getStorageValue('FORM_DRAFTS');
         expect(retrieved).toBeTruthy();
-        expect(retrieved?.data.token).toBe('real-token');
-        
+        expect(retrieved?.data.real?.values).toEqual({ note: 'synthetic' });
+
         // Verify it's actually in localStorage
-        const raw = localStorage.getItem(STORAGE_KEYS.SESSION);
-        expect(raw).toBeTruthy();
+        expect(localStorage.getItem(STORAGE_KEYS.FORM_DRAFTS)).toBeTruthy();
       });
-      
+
       it('should handle localStorage errors gracefully', () => {
-        // Mock localStorage.setItem to throw
-        const originalSetItem = localStorage.setItem;
-        localStorage.setItem = () => {
+        const spy = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
           throw new Error('Quota exceeded');
-        };
-        
-        expect(() => {
-          setStorageValue('SESSION', {
-            data: {
-              token: 'test',
-              user: { id: '1', walletAddress: 'G...' },
-            },
-          });
-        }).not.toThrow();
-        
-        localStorage.setItem = originalSetItem;
+        });
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        expect(() => setStorageValue('FORM_DRAFTS', draft('x'))).not.toThrow();
+
+        spy.mockRestore();
+        errorSpy.mockRestore();
       });
     }
   });

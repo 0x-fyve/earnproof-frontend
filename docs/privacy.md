@@ -8,38 +8,17 @@ The EarnProof frontend uses browser storage (primarily `localStorage`) to mainta
 
 ## Storage Inventory
 
-### Session Storage (`earnproof.session`)
+### Session (not stored)
 
-**Purpose:** Maintain authentication state for wallet-connected users.
+The bearer token and signed-in user profile are held **in memory only** (`lib/session.ts`, backed by `lib/auth/token-manager.ts`). They are never written to `localStorage`, `sessionStorage`, cookies or the URL.
 
-**Data Structure:**
-```typescript
-{
-  version: 1,
-  timestamp: string, // ISO timestamp
-  key: 'SESSION',
-  data: {
-    token: string,    // JWT session token
-    user: {
-      id: string,     // User ID
-      walletAddress: string, // Stellar wallet address
-      email?: string  // Optional email (if provided)
-    }
-  }
-}
-```
+- **Reload:** a page reload drops the session. Protected views fall back to their "connect wallet" state and the user signs a fresh challenge. Nothing is replayed from disk.
+- **Legacy entry:** older builds stored `{ token, user }` under `earnproof.session`. That key is *retired* in `lib/storage/registry.json`. It is never read as a session. It is deleted from `localStorage` and `sessionStorage` the first time `lib/session.ts` is used, and again on every sign-in and sign-out.
+- **Revocation:** logout, expiry (30 second grace window in the token manager), a 401, and a wallet change clear the in-memory session and broadcast a token-free message so every other open tab clears its own copy.
 
-**Retention:** Persists until explicit logout, browser data clearance, or token expiration (server-side).
+### Registered persistence
 
-**Cleanup Triggers:**
-- User-initiated logout (wallet disconnect)
-- Server-side token expiration
-- Browser storage clearance
-
-**Privacy Safeguards:**
-- Token is a server-issued JWT with expiration
-- No wallet private keys or seed phrases are stored
-- Email is optional and only stored if provided during registration
+Everything else the app persists is listed in [`lib/storage/registry.json`](../lib/storage/registry.json): key, area, scope, classification, schema version, owner, declared accessor files, retention and cleanup. See [Storage schema validation](./storage-schema-validation.md) for how this is enforced.
 
 ## What We Explicitly Do NOT Store
 
@@ -61,7 +40,7 @@ The EarnProof frontend uses browser storage (primarily `localStorage`) to mainta
 ## Storage Boundaries
 
 ### User/Wallet Scope
-Session data is scoped to the active wallet address. Changing wallets clears previous session data.
+The in-memory session is scoped to the active wallet. Changing wallets clears it (and notifies other tabs). Per-account records in the registry are keyed by account id.
 
 ### Domain Scope
 All storage is scoped to the application domain (`earnproof.com` in production). No cross-domain storage.
@@ -87,9 +66,9 @@ All storage uses versioned schemas to enable safe migration. Each stored value i
 
 ### Data Minimization
 Only store what's necessary for core functionality:
-- Session token for authenticated API calls
-- User ID for server reference
-- Wallet address for Stellar operations
+- Bearer tokens are never persisted
+- Per-account records are keyed by account id
+- Preferences and drafts hold non-secret values only
 
 ### Default Privacy
 - No analytics or tracking by default
@@ -105,8 +84,8 @@ Only store what's necessary for core functionality:
 
 ### GDPR Considerations
 - **Lawful basis:** Contractual necessity (wallet authentication)
-- **Data minimization:** Only essential session data
-- **Storage limitation:** Session-bound with automatic expiration
+- **Data minimization:** No session data is persisted
+- **Storage limitation:** Each registered key declares its retention and cleanup
 - **User rights:** Clear data via logout or browser controls
 
 ### CCPA Considerations
@@ -126,16 +105,16 @@ Storage behavior is verified through:
 ### Manual Verification
 Review storage via browser Developer Tools:
 1. Open Application > Local Storage
-2. Verify only `earnproof.session` exists
+2. Verify no `earnproof.session` entry exists and no value contains a bearer token
 3. Verify data structure matches documented schema
 4. Verify clearance on logout
 
 ## Security Notes
 
 ### Token Security
-- JWT tokens have server-controlled expiration
+- Tokens have server-controlled expiration and live in memory only
 - Tokens are transmitted over HTTPS only
-- No refresh token mechanism (requires re-authentication)
+- No refresh token mechanism (a reload requires re-authentication)
 
 ### Storage Limitations
 - Browser storage is not encrypted at rest

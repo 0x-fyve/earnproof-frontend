@@ -1,5 +1,9 @@
 /**
  * Browser storage utilities with versioning and migration support
+ *
+ * Every key here must also be declared in `registry.json` (checked by
+ * scripts/storage-schema-audit.js and tests/storage). Bearer tokens and other
+ * secrets are never stored here.
  * 
  * This module provides a structured approach to browser storage with:
  * - Versioned schemas
@@ -9,7 +13,6 @@
  */
 
 export const STORAGE_KEYS = {
-  SESSION: 'earnproof.session' as const,
   FORM_DRAFTS: 'earnproof.form-drafts' as const,
   DISPLAY_PREFERENCES: 'earnproof.display-preferences' as const,
   PROOF_DRAFTS: 'earnproof.proof-drafts' as const,
@@ -20,16 +23,6 @@ export type StorageKey = keyof typeof STORAGE_KEYS;
 export type DisplayPreferenceMode = 'system' | 'enabled' | 'disabled';
 
 export interface StorageSchema {
-  SESSION: {
-    data: {
-      token: string;
-      user: {
-        id: string;
-        walletAddress: string;
-        email?: string;
-      };
-    };
-  };
   FORM_DRAFTS: {
     // Keyed by an application-chosen form id (e.g. "create-proof-flow") so
     // multiple forms can each keep their own draft without colliding.
@@ -50,7 +43,6 @@ export interface StorageSchema {
 
 // Current versions of each storage schema
 export const CURRENT_VERSIONS: Record<StorageKey, number> = {
-  SESSION: 1,
   FORM_DRAFTS: 1,
   DISPLAY_PREFERENCES: 1,
   PROOF_DRAFTS: 1,
@@ -114,10 +106,6 @@ export const localStorageDriver: StorageDriver = {
  * Migration functions for each storage key
  */
 export const migrations: Record<StorageKey, Record<number, StorageMigration>> = {
-  SESSION: {
-    // Version 1 is current - no migration needed
-    1: (data) => data,
-  },
   FORM_DRAFTS: {
     // Version 1 is current - no migration needed
     1: (data) => data,
@@ -270,46 +258,20 @@ function migrateValue<K extends StorageKey>(
 }
 
 /**
- * Migrate a legacy value (without version) to current version
+ * Migrate a legacy value (without version) to current version.
+ *
+ * None of the registered envelope keys ever shipped without a version, so there
+ * is nothing to migrate: an unversioned value under one of these keys is
+ * unknown data and is discarded by the caller. When a future key needs a
+ * pre-version migration, add its case here and a fixture in tests/storage.
+ *
+ * The retired bearer-token session entry is deliberately NOT migrated. It is
+ * deleted by lib/session.ts (see "retired" in registry.json).
  */
 function migrateLegacyValue<K extends StorageKey>(
-  key: K,
-  legacyValue: unknown
+  _key: K,
+  _legacyValue: unknown
 ): StoredValue<K> | null {
-  // Session migration from legacy format
-  if (key === 'SESSION') {
-    try {
-      // Legacy format: { token: string, user: { ... } }
-      if (
-        isRecord(legacyValue) &&
-        typeof legacyValue.token === 'string' &&
-        isRecord(legacyValue.user) &&
-        typeof legacyValue.user.id === 'string' &&
-        typeof legacyValue.user.walletAddress === 'string'
-      ) {
-        const user = {
-          id: legacyValue.user.id,
-          walletAddress: legacyValue.user.walletAddress,
-          ...(typeof legacyValue.user.email === 'string'
-            ? { email: legacyValue.user.email }
-            : {}),
-        };
-
-        return {
-          version: 1,
-          timestamp: new Date().toISOString(),
-          key: 'SESSION',
-          data: {
-            token: legacyValue.token,
-            user,
-          },
-        } as unknown as StoredValue<K>;
-      }
-    } catch (error) {
-      console.error('Legacy session migration failed:', error);
-    }
-  }
-  
   return null;
 }
 
