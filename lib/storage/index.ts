@@ -13,6 +13,7 @@ export const STORAGE_KEYS = {
   FORM_DRAFTS: 'earnproof.form-drafts' as const,
   DISPLAY_PREFERENCES: 'earnproof.display-preferences' as const,
   PROOF_DRAFTS: 'earnproof.proof-drafts' as const,
+  QUICKSTART_PROGRESS: 'earnproof.quickstart-progress' as const,
 } as const;
 
 export type StorageKey = keyof typeof STORAGE_KEYS;
@@ -46,6 +47,11 @@ export interface StorageSchema {
     // Each draft stores non-secret field values with an explicit retention limit.
     data: Record<string, { savedAt: string; expiresAt: string; values: unknown }>;
   };
+  QUICKSTART_PROGRESS: {
+    // Checklist step ids only (see lib/developers/quickstart.ts's
+    // QUICKSTART_STEPS) - never an API secret, key id, or request payload.
+    data: { completedSteps: string[]; updatedAt: string };
+  };
 }
 
 // Current versions of each storage schema
@@ -54,6 +60,7 @@ export const CURRENT_VERSIONS: Record<StorageKey, number> = {
   FORM_DRAFTS: 1,
   DISPLAY_PREFERENCES: 1,
   PROOF_DRAFTS: 1,
+  QUICKSTART_PROGRESS: 1,
 };
 
 export interface StorageMetadata {
@@ -127,6 +134,10 @@ export const migrations: Record<StorageKey, Record<number, StorageMigration>> = 
     1: (data) => data,
   },
   PROOF_DRAFTS: {
+    // Version 1 is current - no migration needed
+    1: (data) => data,
+  },
+  QUICKSTART_PROGRESS: {
     // Version 1 is current - no migration needed
     1: (data) => data,
   },
