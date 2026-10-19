@@ -35,6 +35,11 @@ const navigationItems = [
     description: "View and revoke active sessions on other devices",
   },
   {
+    name: "Security Notifications",
+    href: "/settings/notifications",
+    description: "Inspect tenant-scoped security notices and incident acknowledgements",
+  },
+  {
     name: "Audit Log",
     href: "/settings/audit",
     description: "Filter, verify, and export organization audit records",

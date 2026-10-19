@@ -13,11 +13,38 @@ export const STORAGE_KEYS = {
   FORM_DRAFTS: 'earnproof.form-drafts' as const,
   DISPLAY_PREFERENCES: 'earnproof.display-preferences' as const,
   PROOF_DRAFTS: 'earnproof.proof-drafts' as const,
+  TRANSACTION_OPERATIONS: 'earnproof.transaction-operations' as const,
 } as const;
 
 export type StorageKey = keyof typeof STORAGE_KEYS;
 
 export type DisplayPreferenceMode = 'system' | 'enabled' | 'disabled';
+
+export interface PersistedTransactionOperationRef {
+  operationId: string;
+  transactionHash: string;
+  network: 'testnet' | 'public';
+  status:
+    | 'submitted'
+    | 'included'
+    | 'finalized'
+    | 'failed'
+    | 'replaced'
+    | 'timed-out';
+  resourceType: string;
+  resourceId: string;
+  resourceHref: string | null;
+  ledger: number | null;
+  confirmations: number;
+  requiredConfirmations: number;
+  replacedByHash: string | null;
+  diagnosticMessage: string | null;
+  reorgCount: number;
+  submittedAt: string;
+  updatedAt: string;
+  timeoutAt: string;
+  expiresAt: string;
+}
 
 export interface StorageSchema {
   SESSION: {
@@ -46,6 +73,10 @@ export interface StorageSchema {
     // Each draft stores non-secret field values with an explicit retention limit.
     data: Record<string, { savedAt: string; expiresAt: string; values: unknown }>;
   };
+  TRANSACTION_OPERATIONS: {
+    // Keyed by operationId; stores only non-sensitive operation references with bounded expiry.
+    data: Record<string, PersistedTransactionOperationRef>;
+  };
 }
 
 // Current versions of each storage schema
@@ -54,6 +85,7 @@ export const CURRENT_VERSIONS: Record<StorageKey, number> = {
   FORM_DRAFTS: 1,
   DISPLAY_PREFERENCES: 1,
   PROOF_DRAFTS: 1,
+  TRANSACTION_OPERATIONS: 1,
 };
 
 export interface StorageMetadata {
@@ -127,6 +159,10 @@ export const migrations: Record<StorageKey, Record<number, StorageMigration>> = 
     1: (data) => data,
   },
   PROOF_DRAFTS: {
+    // Version 1 is current - no migration needed
+    1: (data) => data,
+  },
+  TRANSACTION_OPERATIONS: {
     // Version 1 is current - no migration needed
     1: (data) => data,
   },
