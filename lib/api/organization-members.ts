@@ -22,6 +22,10 @@ import { apiClient, bearer, retryRead, retryMutation } from "./client";
 export const ORGANIZATION_ROLES = ["OWNER", "ADMIN", "MEMBER"] as const;
 export type OrganizationRole = (typeof ORGANIZATION_ROLES)[number];
 
+export function isOrganizationMemberRole(value: string): value is OrganizationRole {
+  return (ORGANIZATION_ROLES as readonly string[]).includes(value);
+}
+
 export type OrganizationMember = {
   id: string;
   userId: string;

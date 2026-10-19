@@ -4,6 +4,7 @@
 
 import {
   formatOrganizationRole,
+  isOrganizationMemberRole,
   validateWalletAddressForInvite,
   deriveMemberCapabilities,
   type OrganizationMember,
@@ -33,6 +34,22 @@ describe("Organization Members Utilities", () => {
       expect(
         formatOrganizationRole("UNKNOWN" as unknown as Parameters<typeof formatOrganizationRole>[0])
       ).toBe("UNKNOWN");
+    });
+  });
+
+  describe("isOrganizationMemberRole", () => {
+    it("accepts every real member role", () => {
+      expect(isOrganizationMemberRole("OWNER")).toBe(true);
+      expect(isOrganizationMemberRole("ADMIN")).toBe(true);
+      expect(isOrganizationMemberRole("MEMBER")).toBe(true);
+    });
+
+    it("rejects a policy-only role not assignable to a member", () => {
+      expect(isOrganizationMemberRole("VIEWER")).toBe(false);
+    });
+
+    it("rejects an arbitrary string", () => {
+      expect(isOrganizationMemberRole("NOT_A_ROLE")).toBe(false);
     });
   });
 
