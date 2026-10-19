@@ -5,8 +5,7 @@ import { CreateWebhookForm } from "./create-webhook-form";
 import { WebhookList } from "./webhook-list";
 import { WebhookSecretDisplay } from "./webhook-secret-display";
 import { getWebhooks, type CreateWebhookResponse, type Webhook, rotateWebhook } from "@/lib/api/webhooks";
-
-const SESSION_KEY = "earnproof.session";
+import { readStoredSession } from "@/lib/session";
 
 type SessionData = {
   token: string;
@@ -15,24 +14,6 @@ type SessionData = {
     role: string;
   };
 };
-
-function readStoredSession(): SessionData | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const stored = window.localStorage.getItem(SESSION_KEY);
-  if (!stored) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(stored) as SessionData;
-  } catch {
-    window.localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-}
 
 export function WebhookManagement() {
   const [session] = useState<SessionData | null>(() => readStoredSession());

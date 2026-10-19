@@ -6,6 +6,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RecurringIncomeProofWizard } from "../recurring-income-proof-wizard";
 import { apiClient } from "@/lib/api/client";
+import { clearStoredSession } from "@/lib/session";
 
 jest.mock("@/lib/api/client", () => ({
   apiClient: jest.fn(),
@@ -18,7 +19,7 @@ const mockedApiClient = apiClient as jest.MockedFunction<typeof apiClient>;
 describe("RecurringIncomeProofWizard - deployment metadata gating (#185)", () => {
   beforeEach(() => {
     mockedApiClient.mockReset();
-    window.localStorage.removeItem("earnproof.session");
+    clearStoredSession();
   });
 
   it("verifies deployment metadata before requesting a wallet signature, and blocks connecting when it's unavailable", async () => {

@@ -19,8 +19,7 @@ import {
 } from "@/lib/validation/organization-members";
 import { ConfirmationDialog } from "@/components/common/confirmation-dialog";
 import { formatMessage } from "@/lib/i18n";
-
-const SESSION_KEY = "earnproof.session";
+import { readStoredSession, clearStoredSession } from "@/lib/session";
 
 type SessionData = {
   token: string;
@@ -30,24 +29,6 @@ type SessionData = {
     role: string;
   };
 };
-
-function readStoredSession(): SessionData | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const stored = window.localStorage.getItem(SESSION_KEY);
-  if (!stored) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(stored) as SessionData;
-  } catch {
-    window.localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-}
 
 /**
  * Member listing, invitation, role change, and removal for a single
@@ -200,7 +181,7 @@ export function OrganizationMembers({
   );
 
   const handleSignOutStaleSession = useCallback(() => {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession("unauthorized");
     window.location.reload();
   }, []);
 

@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { SessionList } from "./session-list";
 import { listActiveSessions, type SessionRecord } from "@/lib/sessions/store";
-
-const SESSION_KEY = "earnproof.session";
+import { readStoredSession } from "@/lib/session";
 
 type SessionData = {
   token: string;
@@ -13,24 +12,6 @@ type SessionData = {
     role: string;
   };
 };
-
-function readStoredSession(): SessionData | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const stored = window.localStorage.getItem(SESSION_KEY);
-  if (!stored) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(stored) as SessionData;
-  } catch {
-    window.localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-}
 
 export function SessionManagement() {
   const [session] = useState<SessionData | null>(() => readStoredSession());
