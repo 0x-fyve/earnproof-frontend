@@ -239,6 +239,28 @@ export interface ActivityPage {
   nextCursor: string | null;
 }
 
+export interface CspViolationGroup {
+  id: string;
+  directive: "default-src" | "script-src" | "script-src-elem" | "script-src-attr" | "style-src" | "style-src-elem" | "style-src-attr" | "img-src" | "font-src" | "connect-src" | "media-src" | "worker-src" | "manifest-src" | "object-src" | "base-uri" | "form-action" | "frame-src" | "frame-ancestors" | "child-src";
+  routeCategory: "public" | "verify" | "embed" | "proofs" | "settings" | "issuers" | "developers" | "other";
+  release: string;
+  firstSeenRelease: string;
+  blockedKind: "inline" | "eval" | "data" | "blob" | "same-origin" | "third-party" | "unknown";
+  count: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface CspViolationReport {
+  generatedAt: string;
+  windowStart: string;
+  windowEnd: string;
+  currentRelease: string;
+  releases: Array<string>;
+  groups: Array<CspViolationGroup>;
+  nextCursor: string | null;
+}
+
 export interface ApiError {
   statusCode: number;
   code: "VALIDATION_ERROR" | "INVALID_INPUT" | "MISSING_TOKEN" | "INVALID_TOKEN" | "EXPIRED_TOKEN" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "FORBIDDEN" | "NOT_FOUND" | "PAYMENT_NOT_FOUND" | "PAYMENT_NOT_ELIGIBLE" | "PAYMENT_EXCLUDED" | "CONFLICT" | "TOO_MANY_REQUESTS" | "DEPENDENCY_UNAVAILABLE" | "INTERNAL_ERROR";

@@ -32,6 +32,7 @@
 
 import { apiClient, bearer, retryRead } from "@/lib/api/client";
 import { ApiError } from "@/lib/errors";
+import { MAX_CURSOR_LENGTH, isValidOpaqueCursor } from "@/lib/api/opaque-cursor";
 import { generateCorrelationId } from "@/lib/telemetry/correlation";
 
 export type ActivityOutcome = "success" | "failure" | "pending";
@@ -208,9 +209,7 @@ export const ACTIVITY_MIN_PAGE_SIZE = 1;
 export const ACTIVITY_MAX_PAGE_SIZE = 100;
 export const ACTIVITY_DEFAULT_PAGE_SIZE = 20;
 /** Longest cursor the client will send or accept. */
-export const ACTIVITY_MAX_CURSOR_LENGTH = 512;
-
-const CURSOR_PATTERN = /^[A-Za-z0-9_\-.=:~]+$/;
+export const ACTIVITY_MAX_CURSOR_LENGTH = MAX_CURSOR_LENGTH;
 
 export type ActivityErrorKind =
   | "invalid-request"
@@ -252,14 +251,7 @@ export type FetchedActivityPage = ActivityPage & {
   droppedCount: number;
 };
 
-export function isValidActivityCursor(cursor: unknown): cursor is string {
-  return (
-    typeof cursor === "string" &&
-    cursor.length > 0 &&
-    cursor.length <= ACTIVITY_MAX_CURSOR_LENGTH &&
-    CURSOR_PATTERN.test(cursor)
-  );
-}
+export const isValidActivityCursor = isValidOpaqueCursor;
 
 /**
  * Builds the query string. Throws `invalid-request` for anything outside the

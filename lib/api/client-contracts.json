@@ -134,5 +134,22 @@
       "outcome": ["success", "failure", "pending"]
     },
     "routes": ["GET /activity"]
+  },
+  {
+    "module": "lib/api/csp-violations.ts",
+    "schema": "CspViolationReport",
+    "required": ["generatedAt", "windowStart", "windowEnd", "currentRelease", "releases", "groups", "nextCursor"],
+    "routes": ["GET /csp-violations"]
+  },
+  {
+    "module": "lib/api/csp-violations.ts",
+    "schema": "CspViolationGroup",
+    "required": ["id", "directive", "routeCategory", "release", "firstSeenRelease", "blockedKind", "count", "firstSeenAt", "lastSeenAt"],
+    "enums": {
+      "directive": ["default-src", "script-src", "script-src-elem", "script-src-attr", "style-src", "style-src-elem", "style-src-attr", "img-src", "font-src", "connect-src", "media-src", "worker-src", "manifest-src", "object-src", "base-uri", "form-action", "frame-src", "frame-ancestors", "child-src"],
+      "routeCategory": ["public", "verify", "embed", "proofs", "settings", "issuers", "developers", "other"],
+      "blockedKind": ["inline", "eval", "data", "blob", "same-origin", "third-party", "unknown"]
+    },
+    "routes": ["GET /csp-violations"]
   }
 ]

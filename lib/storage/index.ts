@@ -155,14 +155,10 @@ export function getStorageValue<K extends StorageKey>(
       return null;
     }
     
-    // Legacy format without version - try to migrate
-    const migrated = migrateLegacyValue(key, parsed);
-    if (migrated) {
-      setStorageValue(key, migrated, driver);
-      return migrated as StoredValue<K>;
-    }
-    
-    // Cannot migrate - remove
+    // Unversioned value under an envelope key. None of these keys ever shipped
+    // without a version, so there is no migration path: treat it as unknown
+    // data and discard it. The retired bearer-token session entry is not
+    // migrated either; lib/session.ts deletes it (see "retired" in registry.json).
     driver.removeItem(key);
     return null;
   } catch (error) {
@@ -255,24 +251,6 @@ function migrateValue<K extends StorageKey>(
     console.error(`Migration failed for ${key} from v${fromVersion} to v${toVersion}:`, error);
     return null;
   }
-}
-
-/**
- * Migrate a legacy value (without version) to current version.
- *
- * None of the registered envelope keys ever shipped without a version, so there
- * is nothing to migrate: an unversioned value under one of these keys is
- * unknown data and is discarded by the caller. When a future key needs a
- * pre-version migration, add its case here and a fixture in tests/storage.
- *
- * The retired bearer-token session entry is deliberately NOT migrated. It is
- * deleted by lib/session.ts (see "retired" in registry.json).
- */
-function migrateLegacyValue<K extends StorageKey>(
-  _key: K,
-  _legacyValue: unknown
-): StoredValue<K> | null {
-  return null;
 }
 
 /**
