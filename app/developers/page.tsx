@@ -23,14 +23,20 @@ export default function DevelopersPage() {
           </p>
           <div className="flex gap-3">
             <Link
-              href="/developers/api-keys"
+              href="/developers/quickstart"
               className="inline-flex h-10 items-center justify-center rounded-md bg-cyan-300 px-4 text-xs font-semibold text-slate-950 transition hover:bg-cyan-200"
+            >
+              Integration Quickstart
+            </Link>
+            <Link
+              href="/developers/api-keys"
+              className="inline-flex h-10 items-center justify-center rounded-md border border-white/15 px-4 text-xs font-semibold text-white transition hover:bg-white/5"
             >
               Manage API Keys
             </Link>
             <Link
               href="/developers/webhooks"
-              className="inline-flex h-10 items-center justify-center rounded-md bg-cyan-300 px-4 text-xs font-semibold text-slate-950 transition hover:bg-cyan-200"
+              className="inline-flex h-10 items-center justify-center rounded-md border border-white/15 px-4 text-xs font-semibold text-white transition hover:bg-white/5"
             >
               Manage Webhooks
             </Link>
