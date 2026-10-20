@@ -1,6 +1,7 @@
 import { FeatureGrid, MarketingHero, pageContainer } from "@/components/common/production-ui";
 import { PageHeading } from "@/components/common/page-heading";
 import { PublicShell } from "@/components/layout/public-shell";
+import { ApiDeprecationWarning } from "@/components/common/api-deprecation-warning";
 import Link from "next/link";
 
 const features = [
@@ -14,6 +15,7 @@ export default function DevelopersPage() {
     <PublicShell>
       <div className={pageContainer}>
         <PageHeading title="Build with EarnProof" description="APIs, SDKs, schemas, and webhooks for private income verification." />
+        <ApiDeprecationWarning />
         <MarketingHero title="Build with EarnProof" description="APIs, SDKs, schemas, and webhooks for private income verification." action="Read the quick start" href="/verify" />
         
         <section className="grid gap-4 rounded-lg border border-white/10 bg-white/[0.04] p-5">
