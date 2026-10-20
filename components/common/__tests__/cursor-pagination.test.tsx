@@ -347,51 +347,106 @@ describe("CursorPagination", () => {
     });
   });
 
-  describe("Cursor Recovery Notice", () => {
-    const state: PaginationState = {
-      nextCursor: null,
-      previousCursor: null,
-      isLoading: false,
-    };
+  describe("Recovery", () => {
+    it("renders recovery message and restart button", () => {
+      const state: PaginationState = {
+        nextCursor: null,
+        previousCursor: null,
+        isLoading: false,
+      };
+      const onRestart = jest.fn();
 
-    it("renders nothing when notice is null", () => {
-      const { container } = render(
-        <CursorPagination
-          state={state}
-          onPrevious={jest.fn()}
-          onNext={jest.fn()}
-        />
-      );
-      expect(container.querySelector('[role="status"]')).toBeNull();
-    });
-
-    it("renders the recovery message and support reference", () => {
       render(
         <CursorPagination
           state={state}
           onPrevious={jest.fn()}
           onNext={jest.fn()}
-          notice={{
-            message: "Your page position expired. Restarted from the first page.",
-            supportReference: "Cursor recovery: cursor_expired",
+          onRestart={onRestart}
+          recovery={{
+            code: "cursor_expired",
+            message: "This page link has expired. Restarting from the first page.",
           }}
         />
       );
-      expect(screen.getByText(/Your page position expired/)).toBeInTheDocument();
-      expect(screen.getByText(/Cursor recovery: cursor_expired/)).toBeInTheDocument();
+
+      expect(screen.getByText(/expired/)).toBeInTheDocument();
+      const restartButton = screen.getByLabelText("Restart from first page");
+      fireEvent.click(restartButton);
+      expect(onRestart).toHaveBeenCalledTimes(1);
     });
 
-    it("exposes the notice as a polite status region", () => {
+    it("shows support reference when provided", () => {
+      const state: PaginationState = {
+        nextCursor: null,
+        previousCursor: null,
+        isLoading: false,
+      };
+
       render(
         <CursorPagination
           state={state}
           onPrevious={jest.fn()}
           onNext={jest.fn()}
-          notice={{ message: "Restarted." }}
+          onRestart={jest.fn()}
+          recovery={{
+            code: "invalid_cursor",
+            message: "This page link is no longer valid.",
+            reference: { requestId: "req_123", correlationId: "corr_456" },
+          }}
         />
       );
-      const region = screen.getByRole("status");
-      expect(region).toHaveAttribute("aria-live", "polite");
+
+      expect(screen.getByText(/Request ID: req_123/)).toBeInTheDocument();
+      expect(screen.getByText(/Correlation ID: corr_456/)).toBeInTheDocument();
+    });
+
+    it("does not call onRestart when loading", () => {
+      const onRestart = jest.fn();
+      const state: PaginationState = {
+        nextCursor: null,
+        previousCursor: null,
+        isLoading: true,
+      };
+
+      render(
+        <CursorPagination
+          state={state}
+          onPrevious={jest.fn()}
+          onNext={jest.fn()}
+          onRestart={onRestart}
+          recovery={{
+            code: "cursor_filter_mismatch",
+            message: "Filters changed.",
+          }}
+        />
+      );
+
+      fireEvent.click(screen.getByLabelText("Restart from first page"));
+      expect(onRestart).not.toHaveBeenCalled();
+    });
+
+    it("does not render restart button without onRestart handler", () => {
+      const state: PaginationState = {
+        nextCursor: null,
+        previousCursor: null,
+        isLoading: false,
+      };
+
+      render(
+        <CursorPagination
+          state={state}
+          onPrevious={jest.fn()}
+          onNext={jest.fn()}
+          recovery={{
+            code: "invalid_cursor",
+            message: "Invalid.",
+          }}
+        />
+      );
+
+      expect(
+        screen.queryByLabelText("Restart from first page"),
+      ).not.toBeInTheDocument();
     });
   });
 });

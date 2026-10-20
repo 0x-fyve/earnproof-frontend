@@ -1,0 +1,18 @@
+{
+  "default_branch": "develop",
+  "branches": [
+    "develop",
+    "origin",
+    "security/issue-286-add-signed-cursor-validation-and-pagination"
+  ],
+  "parent": {
+    "develop": null,
+    "origin": "develop",
+    "security/issue-286-add-signed-cursor-validation-and-pagination": "develop"
+  },
+  "order": [
+    "develop",
+    "origin",
+    "security/issue-286-add-signed-cursor-validation-and-pagination"
+  ]
+}

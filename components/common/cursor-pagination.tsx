@@ -1,58 +1,49 @@
 "use client";
 
 import { useCallback } from "react";
+import type { PaginationFilters } from "@/lib/query/pagination-recovery";
 
 export interface PaginationState {
-  /** Opaque, server-signed cursor. The client never decodes or edits it. */
   nextCursor: string | null;
-  /** Opaque, server-signed cursor. The client never decodes or edits it. */
   previousCursor: string | null;
   isLoading: boolean;
+  /**
+   * Filters active when this page was issued. Preserved across a
+   * recovery restart so the user does not lose context.
+   */
+  filters?: PaginationFilters;
+  /** Stable identifier for the current view. */
+  viewKey?: string;
 }
 
-export interface CursorRecoveryNotice {
-  /** Human-readable reason for the restart. */
+export interface PaginationRecoveryInfo {
+  /** Server-classified cursor error code. */
+  code: string;
+  /** User-facing message explaining the recovery. */
   message: string;
-  /** Optional support reference (code + request ID). */
-  supportReference?: string;
+  /** Support-safe reference for reporting. */
+  reference?: { requestId?: string; correlationId?: string };
 }
 
-export function CursorPolicyNotice({
-  notice,
-}: {
-  notice: CursorRecoveryNotice | null;
-}) {
-  if (!notice) return null;
-
-  return (
-    <div
-      className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-3"
-      role="status"
-      aria-live="polite"
-    >
-      <p className="text-sm leading-5 text-amber-200">{notice.message}</p>
-      {notice.supportReference ? (
-        <p className="mt-1 font-mono text-xs text-amber-200/70">
-          {notice.supportReference}
-        </p>
-      ) : null}
-    </div>
-  );
+export interface CursorPaginationProps {
+  state: PaginationState;
+  onPrevious: () => void;
+  onNext: () => void;
+  /** Restart from the first page with the current filters preserved. */
+  onRestart?: () => void;
+  resultCount?: number;
+  /** Recovery information when a cursor failure occurred. */
+  recovery?: PaginationRecoveryInfo | null;
 }
 
 export function CursorPagination({
   state,
   onPrevious,
   onNext,
+  onRestart,
   resultCount = 0,
-  notice = null,
-}: {
-  state: PaginationState;
-  onPrevious: () => void;
-  onNext: () => void;
-  resultCount?: number;
-  notice?: CursorRecoveryNotice | null;
-}) {
+  recovery = null,
+}: CursorPaginationProps) {
   const hasPrevious = state.previousCursor !== null;
   const hasNext = state.nextCursor !== null;
   const isDisabled = state.isLoading;
@@ -69,15 +60,61 @@ export function CursorPagination({
     }
   }, [isDisabled, hasNext, onNext]);
 
+  const handleRestartClick = useCallback(() => {
+    if (!isDisabled && onRestart) {
+      onRestart();
+    }
+  }, [isDisabled, onRestart]);
+
+  const referenceText = recovery?.reference
+    ? [
+        recovery.reference.requestId
+          ? `Request ID: ${recovery.reference.requestId}`
+          : null,
+        recovery.reference.correlationId
+          ? `Correlation ID: ${recovery.reference.correlationId}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "";
+
   return (
-    <div className="grid gap-3">
-      <CursorPolicyNotice notice={notice} />
+    <div className="flex flex-col gap-3">
+      {recovery && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-3"
+        >
+          <p className="text-sm leading-5 text-amber-200">
+            {recovery.message}
+          </p>
+          {referenceText && (
+            <p className="mt-2 font-mono text-xs text-amber-200/80">
+              {referenceText}
+            </p>
+          )}
+          {onRestart && (
+            <button
+              type="button"
+              onClick={handleRestartClick}
+              disabled={isDisabled}
+              aria-label="Restart from first page"
+              className="mt-2 h-8 rounded-md border border-amber-300/30 bg-amber-300/10 px-3 text-xs font-semibold text-amber-200 transition hover:bg-amber-300/20 disabled:opacity-50"
+            >
+              Restart from first page
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-4">
         <button
           onClick={handlePreviousClick}
           disabled={isDisabled || !hasPrevious}
           aria-label="Previous page"
-          className="h-10 rounded-md border border-white/15 px-4 text-xs font-semibold text-white disabled:opacity-55 hover:bg-white/5 transition"
+          className="h-10 rounded-md border border-white/15 px-4 text-xs font-semibold text-white disabled:opacity-50 hover:bg-white/5 transition"
         >
           Previous
         </button>
@@ -99,7 +136,7 @@ export function CursorPagination({
           onClick={handleNextClick}
           disabled={isDisabled || !hasNext}
           aria-label="Next page"
-          className="h-10 rounded-md border border-white/15 px-4 text-xs font-semibold text-white disabled:opacity-55 hover:bg-white/5 transition"
+          className="h-10 rounded-md border border-white/15 px-4 text-xs font-semibold text-white disabled:opacity-50 hover:bg-white/5 transition"
         >
           Next
         </button>

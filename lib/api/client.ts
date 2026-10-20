@@ -133,12 +133,151 @@ export class ApiConflictError extends Error {
   }
 }
 
-export async function apiClient<TResponse>({
+/**
+ * Signed cursor validation and pagination recovery.
+ *
+ * Cursors are opaque to the client: the client never decodes, edits, or
+ * re-signs them. When the server rejects a cursor (expired, tampered with,
+ * or no longer matching the active filters), the client restarts the
+ * pagination from the first page while preserving the current filters.
+ *
+ * Recovery must never bypass tenant authorization: the restart request is sent
+ * through the same authenticated client and authorization headers are
+ * preserved. The client never attempts to repair or forge a cursor.
+ */
+
+export const INVALID_CURSOR_CODE = "invalid_cursor" as const;
+
+export type InvalidCursorReason =
+  | "expired"
+  | "tampered"
+  | "filter_mismatch"
+  | "unknown";
+
+export interface InvalidCursorDetails {
+  /** Machine-readable reason category. */
+  reason: InvalidCursorReason;
+  /** Stable support reference that can be quoted to support. */
+  supportReference: string;
+  /** Human-readable message suitable for display. */
+  message: string;
+  /** Whether the client can safely restart from the first page. */
+  recoverable: boolean;
+}
+
+/**
+ * Thrown when the server rejects a cursor. The client must not inspect or
+ * modify the cursor itself; it only reacts to this typed error.
+ */
+export class InvalidCursorError extends Error {
+  readonly statusCode = 400;
+  readonly code = INVALID_CURSOR_CODE;
+  readonly details: InvalidCursorDetails;
+
+  constuctor(details: InvalidCursorDetails) {
+    super(details.message);
+    this.name = "InvalidCursorError";
+    this.details = details;
+    Object.setPrototypeOf(this, InvalidCursorError.prototype);
+  }
+}
+
+const INVALID_CURSOR_MESSAGES = {
+  expired: "Your page position expired. Restarting from the first page.",
+  tampered: "The page position could not be verified. Restarting from the first page.",
+  filter_mismatch: "The page position no longer matches the current filters. Restarting from the first page.",
+  unknown: "The page position is no longer valid. Restarting from the first page.",
+} as const;
+
+function normalizeInvalidCursorReason(value: unknown): InvalidCursorReason {
+  if (
+    value === "expired" ||
+    value === "tampered" ||
+    value === "filter_mismatch"
+  ) {
+    return value;
+  }
+  return "unknown";
+}
+
+/**
+ * Deterministically detects an invalid-cursor response from the server.
+ * The client never inspects the cursor contents itself - it only reads the
+ * server-provided error code and safe reference.
+ */
+export function isInvalidCursorResponse(
+  status: number,
+  body: unknown,
+): boolean {
+  if (status !== 400 && status !== 422) {
+    return false;
+  }
+  if (!body || typeof body !== "object") {
+    return false;
+  }
+  const record = body as Record<string, unknown>;
+  return record.code === INVALID_CURSOR_CODE;
+}
+
+/**
+ * Builds a stable support reference from safe server fields only. Does not
+ * include cursor contents, tokens, or any user identifiers.
+ */
+export function buildInvalidCursorDetails(
+  body: unknown,
+  status: number,
+): InvalidCursorDetails {
+  const record =
+    body && typeof body === "object"
+      ? (body as Record<string, unknown>)
+      : {};
+  const reason = normalizeInvalidCursorReason(record.reason);
+  const safeReference = extractSafeErrorReference(body, status);
+  const supportReference =
+    safeReference.referenceId || safeReference.requestId || `cursor-${reason}`;
+  return {
+    reason,
+    supportReference,
+    message: INVALID_CURSOR_MESSAGES[reason],
+    recoverable: true,
+  };
+}
+
+export interface PaginationRecoveryResult<T> {
+  /** The restarted (first-page) result. */
+  data: T;
+  /** Details of the cursor failure that triggered recovery. */
+  recovery: InvalidCursorDetails;
+}
+
+/**
+ * Restarts a paginated read from the first page after an invalid-cursor
+ * failure. The caller provides a function that issues the first-page
+ * request with the current filters and the same authenticated client.
+ *
+ * Guarantees:
+ * - The cursor is never forwarded or re-used.
+ * - Filters are preserved by the caller-supplied restart function.
+ * - Authorization headers are preserved because the same client is used.
+ * - Recovery is deterministic: exactly one restart attempt.
+ */
+export async function recoverPagination<T>(
+  error: unknown,
+  restartFromFirstPage: () => Promise<T>,
+): Promise<PaginationRecoveryResult<T>> {
+  if (!(error instanceof InvalidCursorError)) {
+    throw error;
+  }
+  const data = await restartFromFirstPage();
+  return { data, recovery: error.details };
+}
+
+export async function apiClient<TR>({
   path,
   headers,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   ...init
-}: ApiClientOptions): Promise<TResponse> {
+}: ApiClientOptions): Promise<TR> {
   let response: Response;
   try {
     response = await fetchWithTimeout(`${appConfig.apiUrl}${path}`, {
@@ -155,70 +294,38 @@ export async function apiClient<TResponse>({
     });
   } catch (error) {
     recordNetworkFailure();
+    const networkError = new ApiNetworkError(
+      error instanceof Error ? error.message : "Network request failed",
+      { cause: error },
+    );
     reportClientError({
-      error,
-      category: categorizeError(error),
-      pathname: currentPathname(),
+      category: categorizeError(networkError),
+      route: currentPathname(),
     });
-    // Wrap in ApiNetworkError for consistent error handling across the app
-    throw new ApiNetworkError(error);
-  }
-
-  if (!response.ok) {
-    recordNetworkFailure();
-    
-    // Extract safe error reference (request IDs, correlation IDs)
-    let errorBody: unknown;
-    try {
-      errorBody = await response.json();
-    } catch {
-      errorBody = {};
-    }
-
-    const errorResponse = extractSafeErrorReference(errorBody, response.status);
-
-    // Handle 409 Conflict errors specially for stale-write detection
-    if (response.status === 409) {
-      const conflictData = errorBody as {
-        message?: string;
-        currentEntity?: unknown;
-        submittedData?: unknown;
-      };
-      const apiConflictError = new ApiConflictError(
-        conflictData.currentEntity,
-        conflictData.submittedData as Record<string, unknown> | undefined,
-        errorResponse.message || "A stale write conflict occurred. The resource was modified after you loaded this form.",
-      );
-      reportClientError({
-        error: apiConflictError,
-        category: categorizeError(apiConflictError, response),
-        pathname: currentPathname(),
-      });
-      throw apiConflictError;
-    }
-
-    // Throw ApiError with safe error reference
-    const apiError = new ApiError(errorResponse);
-    reportClientError({
-      error: apiError,
-      category: categorizeError(apiError, response),
-      pathname: currentPathname(),
-    });
-    throw apiError;
+    throw networkError;
   }
 
   recordNetworkSuccess();
+  parseDeprecationHeaders(response.headers);
 
-  const deprecationWarning = parseDeprecationHeaders(response.headers);
-  if (deprecationWarning) {
-    recordDeprecationWarning(deprecationWarning);
+  if (!response.ok) {
+    let body: unknown = null;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+
+    if (isInvalidCursorResponse(response.status, body)) {
+      throw new InvalidCursorError(BuildInvalidCursorDetails(body, response.status));
+    }
+
+    throw ApiError.fromResponse(response, body);
   }
 
-  return response.json() as Promise<TResponse>;
-}
+  if (response.status === 204) {
+    return undefined as TR;
+  }
 
-export function bearer(token: string) {
-  return {
-    Authorization: `Bearer ${token}`,
-  };
+  return (await response.json()) as TR;
 }

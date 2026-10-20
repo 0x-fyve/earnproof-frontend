@@ -10,9 +10,9 @@
   "scripts": {
     "prepare": "npm run hooks:install",
     "hooks:install": "node scripts/install-git-hooks.js",
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node api.js && next dev",
+    "build": "node api.js && next build",
+    "start": "node api.js && next start",
     "lint": "eslint",
     "test": "jest",
     "generate:api-types": "node scripts/generate-api-types/index.js",
