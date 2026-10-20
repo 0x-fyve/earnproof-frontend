@@ -7,6 +7,11 @@ import {
   isMalformedIdentifier,
   type IdentifierKind,
 } from "@/lib/validation/identifier-display";
+import {
+  BIDI_ISOLATE_STYLE,
+  makeBidiSafeForDisplay,
+  stripBidiControlCharacters,
+} from "@/lib/i18n/bidi-isolation";
 
 /**
  * Shared accessible control for displaying a cryptographic identifier
@@ -64,18 +69,30 @@ export function CryptographicIdentifier({
     ? `${describeIdentifierKind(kind)} on ${network}`
     : describeIdentifierKind(kind);
 
+  // Bidi safety (#228): the raw `value` (used for copy, via handleCopy
+  // below, and for the aria-label's spoken content) is never mutated —
+  // only what gets wrapped in Unicode isolate marks for VISUAL rendering
+  // changes. Bidi control characters are stripped from the aria-label
+  // too so a screen reader doesn't get a confusing readout, but the
+  // underlying `value` string handleCopy sends to the clipboard is
+  // completely untouched by any of this.
+  const visibleText = isExpanded ? display.fullValue : display.compactLabel;
+  const { displayValue: isolatedVisibleText } = makeBidiSafeForDisplay(visibleText);
+  const spokenValue = stripBidiControlCharacters(value);
+
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5" data-testid="cryptographic-identifier">
       <span
-        aria-label={`${kindLabel}: ${value}`}
+        aria-label={`${kindLabel}: ${spokenValue}`}
         className="font-mono text-xs text-slate-200"
         dir="ltr"
+        style={BIDI_ISOLATE_STYLE}
         // The full value is always present in the DOM (via aria-label and
         // the hidden full-value span below for copy/select), so a screen
         // reader always hears the complete identifier regardless of
         // whether the visual compact/expanded state is showing it.
       >
-        {isExpanded ? display.fullValue : display.compactLabel}
+        {isolatedVisibleText}
       </span>
 
       {display.isTruncatable && (
