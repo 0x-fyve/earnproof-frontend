@@ -346,4 +346,52 @@ describe("CursorPagination", () => {
       expect(container).toBeInTheDocument();
     });
   });
+
+  describe("Cursor Recovery Notice", () => {
+    const state: PaginationState = {
+      nextCursor: null,
+      previousCursor: null,
+      isLoading: false,
+    };
+
+    it("renders nothing when notice is null", () => {
+      const { container } = render(
+        <CursorPagination
+          state={state}
+          onPrevious={jest.fn()}
+          onNext={jest.fn()}
+        />
+      );
+      expect(container.querySelector('[role="status"]')).toBeNull();
+    });
+
+    it("renders the recovery message and support reference", () => {
+      render(
+        <CursorPagination
+          state={state}
+          onPrevious={jest.fn()}
+          onNext={jest.fn()}
+          notice={{
+            message: "Your page position expired. Restarted from the first page.",
+            supportReference: "Cursor recovery: cursor_expired",
+          }}
+        />
+      );
+      expect(screen.getByText(/Your page position expired/)).toBeInTheDocument();
+      expect(screen.getByText(/Cursor recovery: cursor_expired/)).toBeInTheDocument();
+    });
+
+    it("exposes the notice as a polite status region", () => {
+      render(
+        <CursorPagination
+          state={state}
+          onPrevious={jest.fn()}
+          onNext={jest.fn()}
+          notice={{ message: "Restarted." }}
+        />
+      );
+      const region = screen.getByRole("status");
+      expect(region).toHaveAttribute("aria-live", "polite");
+    });
+  });
 });

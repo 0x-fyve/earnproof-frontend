@@ -1,51 +1,111 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef , useState } from "react";
 import type { ApiError } from "@/lib/errors";
 
 type ErrorReferenceProps = {
   error: ApiError | Error;
+  /**
+   * Optional callback invoked when the user acknowledges a stale or
+   * invalid cursor and wishes to restart pagination from the first page.
+   * The client must never re-use the failed cursor contents.
+   */
+  onRestart?: () => void;
+  /** Optional label for the restart action. */
+  restartLabel?: string;
 };
 
+const COPY_RESET_MS = 2000;
+
+const SUPPORT_HINT =
+  "Include this reference when contacting support.";
+
 /**
- * Displays a compact error reference with support-safe request IDs
- * Provides a copy action for easy reporting to customer support
+ * Displays a compact error reference with support-safe request IDs.
+ * Provides a copy action for easy reporting to customer support.
+ *
+ * When the error indicates an invalid or expired cursor, an optional
+ * restart action is rendered. The client never edits or trusts cursor
+ * contents; restarting always requests the first page and relies on the
+ * server to re-authorize the tenant scope.
  */
-export function ErrorReference({ error }: ErrorReferenceProps) {
+export function ErrorReference({
+  error,
+  onRestart,
+  restartLabel = "Restart from first page",
+}: ErrorReferenceProps) {
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
 
   const isApiError = error instanceof Error && "requestId" in error;
   const apiError = isApiError ? (error as ApiError) : null;
 
-  const hasReference = apiError && (apiError.requestId || apiError.correlationId);
+  const hasReference = Boolean(
+    apiError && (apiError.requestId || apiError.correlationId),
+  );
+
+  // Determine whether this error represents a cursor failure that can be
+  // safely recovered by restarting pagination. The client never inspects
+  // cursor contents to make this decision — it relies on the server-set
+  // error code only.
+  const isCursorError = Boolean(apiError && apiError.code === "INVALID_CURSOR");
+  const canRestart = isCursorError && typeof onRestart === "function";
+
+  const referenceText = hasReference
+    ? [
+        apiError?.requestId ? `Request ID: ${apiError.requestId}` : null,
+        apiError?.correlationId
+          ? `Correlation ID: ${apiError.correlationId}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "";
+
+  const handleCopy = async () => {
+    if (!referenceText) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(referenceText);
+      setCopied(true);
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+      timerRef.current = setTimeout(() => {
+        setCopied(false);
+        timerRef.current = null;
+      }, COPY_RESET_MS);
+    } catch {
+      // Clipboard API might fail in some contexts, silently ignore
+    }
+  };
 
   if (!hasReference) {
     return (
       <div className="rounded-lg border border-rose-300/30 bg-rose-300/10 p-3">
         <p className="text-sm leading-5 text-rose-200">{error.message}</p>
+        {canRestart && (
+          <button
+            type="button"
+            onClick={onRestart}
+            className="mt-3 rounded-lg border border-rose-300/30 bg-rose-300/10 px-3 py-1.5 text-xs font-medium text-rose-200 transition hover:bg-rose-300/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+          >
+            {restartLabel}
+          </button>
+        )}
       </div>
     );
   }
-
-  const referenceText = [
-    apiError.requestId ? `Request ID: ${apiError.requestId}` : null,
-    apiError.correlationId
-      ? `Correlation ID: ${apiError.correlationId}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(referenceText);
-      setCopied(true);
-      // Reset after 2 seconds
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API might fail in some contexts, silently ignore
-    }
-  };
 
   return (
     <div className="rounded-lg border border-rose-300/30 bg-rose-300/10 p-3">
@@ -55,20 +115,29 @@ export function ErrorReference({ error }: ErrorReferenceProps) {
             {error.message}
           </p>
           <div className="mt-2 space-y-1 text-xs text-rose-200/80">
-            {apiError.requestId && (
+            {apiError?.requestId && (
               <p className="font-mono">
                 Request ID: {apiError.requestId}
               </p>
             )}
-            {apiError.correlationId && (
+            {apiError?.correlationId && (
               <p className="font-mono">
                 Correlation ID: {apiError.correlationId}
               </p>
             )}
           </div>
           <p className="mt-2 text-xs text-rose-200/70">
-            Include this reference when contacting support.
+            {SUPPORT_HINT}
           </p>
+          {canRestart && (
+            <button
+              type="button"
+              onClick={onRestart}
+              className="mt-3 rounded-lg border border-rose-300/30 bg-rose-300/10 px-3 py-1.5 text-xs font-medium text-rose-200 transition hover:bg-rose-300/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+            >
+              {restartLabel}
+            </button>
+          )}
         </div>
         <button
           type="button"

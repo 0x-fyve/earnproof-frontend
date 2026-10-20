@@ -9,6 +9,7 @@ import {
   type SupportBundleFieldKey,
 } from "@/lib/diagnostics/supportBundle";
 import { copyTextToClipboard } from "@/lib/credentials/export";
+import { buildSupportReference } from "@/lib/api/supportReference";
 
 function downloadJson(bundle: SupportBundle): void {
   const body = JSON.stringify(bundle, null, 2);
@@ -39,6 +40,7 @@ export function SupportDiagnosticsExport() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [supportReference, setSupportReference] = useState<string | null>(null);
 
   async function generate() {
     setError(null);
@@ -49,6 +51,7 @@ export function SupportDiagnosticsExport() {
       );
       const next = await buildSupportBundle({ pathname: pathname ?? "/", includeFields });
       setBundle(next);
+      setSupportReference(buildSupportReference(next.correlationId));
       setOpen(true);
     } catch {
       // buildSupportBundle is designed to never throw (health lookups are
@@ -80,6 +83,7 @@ export function SupportDiagnosticsExport() {
   function cancel() {
     setOpen(false);
     setBundle(null);
+    setSupportReference(null);
   }
 
   async function copy() {
@@ -153,6 +157,12 @@ export function SupportDiagnosticsExport() {
               <dt className="text-slate-400">Request ID</dt>
               <dd className="font-mono text-white">{bundle.correlationId}</dd>
             </div>
+            {supportReference ? (
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-400">Support reference</dt>
+                <dd className="font-mono text-white">{supportReference}</dd>
+              </div>
+            ) : null}
           </dl>
 
           <fieldset className="mt-3 grid gap-2 rounded-md border border-white/10 p-3">
