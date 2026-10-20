@@ -60,7 +60,7 @@ export function ProofSharingPanel({ proofId, userId }: { proofId: string; userId
 
       <section className="grid gap-3 rounded-lg border border-white/10 bg-white/[0.04] p-5">
         <h2 className="text-xl font-semibold text-white">Active share links</h2>
-        <ShareLinkList links={links} onRevoke={handleRevoke} revokingId={revokingId} />
+        <ShareLinkList links={links} onRevoke={handleRevoke} revokingId={revokingId} userId={userId} />
       </section>
     </div>
   );

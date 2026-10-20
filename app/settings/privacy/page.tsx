@@ -5,6 +5,7 @@ import { PageHeading } from "@/components/common/page-heading";
 import { pageContainer } from "@/components/common/production-ui";
 import { PublicShell } from "@/components/layout/public-shell";
 import { ConsentReceiptLookup } from "@/components/proofs/consent-receipt-lookup";
+import { PolicyConsentHistoryPanel } from "@/components/settings/policy-consent-history";
 import { readStoredSession } from "@/lib/session";
 
 export default function PrivacySettingsPage() {
@@ -14,10 +15,11 @@ export default function PrivacySettingsPage() {
     <PublicShell>
       <section className={`${pageContainer} gap-8 sm:gap-10`}>
         <PageHeading
-          description="Review and look up disclosure consent receipts from proof verification requests you've approved."
+          description="Review which privacy policy and terms of service versions you have accepted, and look up disclosure consent receipts from proof verification requests you've approved."
           eyebrow="Privacy"
-          title="Disclosure Consent Receipts"
+          title="Privacy and Consent Settings"
         />
+        <PolicyConsentHistoryPanel />
         {session ? (
           <ConsentReceiptLookup walletHash={session.user.walletHash} />
         ) : (
