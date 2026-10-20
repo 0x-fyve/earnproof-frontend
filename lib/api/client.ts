@@ -2,6 +2,8 @@ import { appConfig } from "@/config/app";
 import { ApiError, extractSafeErrorReference } from "@/lib/errors";
 import { categorizeError, reportClientError } from "@/lib/telemetry";
 import { ApiNetworkError, recordNetworkFailure, recordNetworkSuccess } from "@/lib/network";
+import { parseDeprecationHeaders } from "./deprecation-warnings";
+import { recordDeprecationWarning } from "./use-deprecation-warning";
 
 const DEFAULT_TIMEOUT_MS = 10_000; // 10 seconds
 
@@ -206,6 +208,12 @@ export async function apiClient<TResponse>({
   }
 
   recordNetworkSuccess();
+
+  const deprecationWarning = parseDeprecationHeaders(response.headers);
+  if (deprecationWarning) {
+    recordDeprecationWarning(deprecationWarning);
+  }
+
   return response.json() as Promise<TResponse>;
 }
 
