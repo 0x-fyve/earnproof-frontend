@@ -5,6 +5,7 @@ import { PageHeading } from "@/components/common/page-heading";
 import { PublicShell } from "@/components/layout/public-shell";
 import { StatusCheckSkeleton } from "@/components/common/skeleton/status-check-skeleton";
 import { SupportDiagnosticsExport } from "@/components/common/support-diagnostics-export";
+import { ContractDriftStatusPanel } from "@/components/common/contract-drift-panel";
 import { useHealthCheck } from "@/lib/health-check";
 import { defineMessages, formatMessage, formatRelativeTime, formatTime } from "@/lib/i18n";
 
@@ -202,6 +203,17 @@ export default function StatusPage() {
               rows={allRows}
               searchPlaceholder={messages.searchPlaceholder}
             />
+
+            <div>
+              <h2 className="text-xl font-semibold text-white">Backend-to-contract drift</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                Whether the backend&apos;s configuration matches what is live on-chain, and any
+                active operator acknowledgements.
+              </p>
+              <div className="mt-4">
+                <ContractDriftStatusPanel />
+              </div>
+            </div>
 
             <div>
               <h2 className="text-xl font-semibold text-white">{messages.supportDiagnosticsTitle}</h2>
