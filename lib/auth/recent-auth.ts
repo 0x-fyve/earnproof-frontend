@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api/client";
+import { getTabSyncCoordinator } from "./tab-sync-coordinator";
+import { TAB_SYNC_RESTRICTIVENESS } from "./tab-sync-protocol";
 import type { AuthChallengeResponse, AuthVerifyResponse } from "@/lib/api/generated/v1";
 
 /**
@@ -77,10 +79,59 @@ export function useRecentAuth({
     setError(null);
   }, []);
 
+  // Freshness ends at exactly lastVerifiedAt + RECENT_AUTH_WINDOW_MS (the
+  // comparison below is strict). At that instant this tab tells every other
+  // tab its recent auth expired (#274), so a stale confirmation can't
+  // linger in one tab after expiring in another.
+  const expiryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const isFresh = useCallback(() => {
     if (lastVerifiedAtRef.current === null) return false;
     return Date.now() - lastVerifiedAtRef.current < RECENT_AUTH_WINDOW_MS;
   }, []);
+
+  const clearExpiryTimer = useCallback(() => {
+    if (expiryTimerRef.current !== null) {
+      clearTimeout(expiryTimerRef.current);
+      expiryTimerRef.current = null;
+    }
+  }, []);
+
+  const markVerified = useCallback(() => {
+    clearExpiryTimer();
+    lastVerifiedAtRef.current = Date.now();
+    expiryTimerRef.current = setTimeout(() => {
+      expiryTimerRef.current = null;
+      lastVerifiedAtRef.current = null;
+      getTabSyncCoordinator()?.publish("recent_auth_expired");
+    }, RECENT_AUTH_WINDOW_MS);
+  }, [clearExpiryTimer]);
+
+  // Downgrades from other tabs: recent-auth expiry (level 2) and anything
+  // more restrictive drop this tab's freshness; logout/revocation (level 3+)
+  // also discard a pending action. Nothing received can make auth fresh.
+  useEffect(() => {
+    const coordinator = getTabSyncCoordinator();
+    if (!coordinator) return undefined;
+    const unsubscribe = coordinator.subscribe((event) => {
+      if (event.level >= TAB_SYNC_RESTRICTIVENESS.recent_auth_expired) {
+        clearExpiryTimer();
+        lastVerifiedAtRef.current = null;
+      }
+      if (event.level >= TAB_SYNC_RESTRICTIVENESS.wallet_logout) {
+        pendingActionRef.current = null;
+        requestedForAddressRef.current = null;
+        setChallenge(null);
+        setIsPromptOpen(false);
+        setStatus("idle");
+        setError(null);
+      }
+    });
+    return () => {
+      unsubscribe();
+      clearExpiryTimer();
+    };
+  }, [clearExpiryTimer]);
 
   const requestRecentAuth = useCallback(
     (action: () => void | Promise<void>) => {
@@ -167,14 +218,14 @@ export function useRecentAuth({
         }),
       });
 
-      lastVerifiedAtRef.current = Date.now();
+      markVerified();
       clearPending();
       await action();
     } catch {
       setError("Reauthentication failed. Please try again.");
       setStatus("error");
     }
-  }, [challenge, clearPending, signMessage, walletAddress]);
+  }, [challenge, clearPending, markVerified, signMessage, walletAddress]);
 
   return {
     isPromptOpen,

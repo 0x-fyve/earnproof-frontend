@@ -41,6 +41,19 @@ The EarnProof frontend uses browser storage (primarily `localStorage`) to mainta
 - No wallet private keys or seed phrases are stored
 - Email is optional and only stored if provided during registration
 
+### Cross-tab sync message (`earnproof.tab-sync.v1`)
+
+**Purpose:** Storage-event fallback for cross-tab auth/tenant sync when
+`BroadcastChannel` is unavailable ([docs/cross-tab-sync.md](./cross-tab-sync.md)).
+
+**Data:** `{ v, type, epoch, tabId, tenantId?, ts }` only: an event type,
+a logical clock value, a random per-tab id, an optional organization id and a
+timestamp. No token, session id, wallet address or claim value. Messages
+with any other field are rejected.
+
+**Retention:** None at rest. The value is written and removed in the same
+call, existing only long enough to fire a `storage` event in other tabs.
+
 ## What We Explicitly Do NOT Store
 
 ### Sensitive Financial Data

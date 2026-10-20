@@ -3,6 +3,8 @@
  * Sessions are stored in localStorage under the key "earnproof.session".
  */
 
+import { getTabSyncCoordinator } from "@/lib/auth/tab-sync-coordinator";
+
 export type SessionUser = {
   id: string;
   walletAddress: string;
@@ -56,12 +58,20 @@ export function storeSession(session: Session): void {
 }
 
 /**
- * Clear the stored session from localStorage.
+ * Clear the stored session from localStorage and tell other open tabs the
+ * wallet logged out (#274), so they drop their in-memory auth and
+ * tenant-scoped state too.
+ *
+ * Pass `{ broadcast: false }` when clearing in response to a message that
+ * came from another tab, so tabs never echo a logout back and forth.
  */
-export function clearStoredSession(): void {
+export function clearStoredSession({ broadcast = true }: { broadcast?: boolean } = {}): void {
   if (typeof window === "undefined") {
     return;
   }
 
   window.localStorage.removeItem(SESSION_KEY);
+  if (broadcast) {
+    getTabSyncCoordinator()?.publish("wallet_logout");
+  }
 }
