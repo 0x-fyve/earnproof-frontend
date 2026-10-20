@@ -1,6 +1,7 @@
 import { PageHeading } from "@/components/common/page-heading";
 import { pageContainer } from "@/components/common/production-ui";
 import { PaymentSyncPanel } from "@/components/payments/payment-sync-panel";
+import { CheckpointHealthDashboard } from "@/components/payments/checkpoint-health-dashboard";
 import { PublicShell } from "@/components/layout/public-shell";
 
 export default function PaymentsSettingsPage() {
@@ -13,6 +14,7 @@ export default function PaymentsSettingsPage() {
           title="Payment Synchronization"
         />
         <PaymentSyncPanel />
+        <CheckpointHealthDashboard />
       </section>
     </PublicShell>
   );
