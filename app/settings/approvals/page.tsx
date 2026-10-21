@@ -19,6 +19,16 @@ import { ApprovalQueue } from "@/components/approvals/approval-queue";
 import { ApprovalDetail } from "@/components/approvals/approval-detail";
 import { ApprovalOperation } from "@/lib/validation/operations";
 
+// #332: overrides the /settings default — this page additionally
+// restricts to OWNER/ADMIN (enforced client-side below via
+// canAccessApprovals), not just any authenticated user.
+export const routeAuth = {
+  access: "protected",
+  role: "ADMIN",
+  capability: null,
+  cache: "no-store",
+};
+
 /**
  * Main approvals settings page component
  */
