@@ -10,6 +10,11 @@ const navigationItems = [
     description: "Manage organizations and their status",
   },
   {
+    name: "Onboarding",
+    href: "/settings/organizations/onboarding",
+    description: "Review required and optional onboarding steps for this organization",
+  },
+  {
     name: "Issuers",
     href: "/settings/issuers",
     description: "Manage issuers and their organizational relationships",
