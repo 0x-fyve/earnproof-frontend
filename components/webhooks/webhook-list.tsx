@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { disableWebhook, enableWebhook, deleteWebhook, rotateWebhook, formatWebhookUrl, type Webhook } from "@/lib/api/webhooks";
 import { WebhookActionMenu } from "./webhook-action-menu";
+import { WebhookOwnershipVerificationStatus } from "./webhook-ownership-verification-status";
 
 export function WebhookList({
   webhooks,
@@ -167,6 +168,10 @@ export function WebhookList({
                 onRotate={() => setConfirmRotate(webhook.id)}
                 onDelete={() => setConfirmDelete(webhook.id)}
               />
+            </div>
+
+            <div className="mt-3">
+              <WebhookOwnershipVerificationStatus url={webhook.url} webhookId={webhook.id} />
             </div>
 
             {error && (
