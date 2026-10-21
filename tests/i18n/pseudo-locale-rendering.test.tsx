@@ -200,6 +200,14 @@ describe("the status route under the pseudo-locale", () => {
     jest.doMock("@/components/common/support-diagnostics-export", () => ({
       SupportDiagnosticsExport: () => <div>Support diagnostics export</div>,
     }));
+    // Same reasoning as above: the drift panel's own text/layout is covered
+    // by components/common/__tests__/contract-drift-panel.test.tsx, and its
+    // self-loading wrapper's effect/useState churn interacts badly with
+    // this suite's jest.resetModules() + doMock setup, so it's mocked out
+    // here too.
+    jest.doMock("@/components/common/contract-drift-panel", () => ({
+      ContractDriftStatusPanel: () => <div>Backend-to-contract drift placeholder</div>,
+    }));
 
     const { default: StatusPage } = await import("@/app/status/page");
     return render(<StatusPage />);

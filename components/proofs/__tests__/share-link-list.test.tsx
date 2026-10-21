@@ -5,6 +5,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ShareLinkList } from "../share-link-list";
 import type { ShareLinkWithStatus } from "@/lib/proof-sharing/store";
+import { recordAccessAttempt } from "@/lib/proof-sharing/access-history";
 
 function link(overrides: Partial<ShareLinkWithStatus>): ShareLinkWithStatus {
   return {
@@ -86,5 +87,35 @@ describe("ShareLinkList", () => {
       <ShareLinkList links={[link({ discloseAmount: true, discloseSender: true })]} onRevoke={jest.fn()} revokingId={null} />,
     );
     expect(screen.getByText("amount, sender")).toBeInTheDocument();
+  });
+
+  describe("access history insights (#221)", () => {
+    beforeEach(() => {
+      window.localStorage.clear();
+    });
+
+    it("does not render access insights when userId is omitted", () => {
+      render(<ShareLinkList links={[link({ id: "share-1" })]} onRevoke={jest.fn()} revokingId={null} />);
+      expect(screen.queryByText(/No access attempts yet/i)).not.toBeInTheDocument();
+    });
+
+    it("renders access insights when userId is provided", () => {
+      render(
+        <ShareLinkList links={[link({ id: "share-1" })]} onRevoke={jest.fn()} revokingId={null} userId="user-1" />,
+      );
+      expect(screen.getByText(/No access attempts yet/i)).toBeInTheDocument();
+    });
+
+    it("reflects recorded access attempts for the matching link", () => {
+      recordAccessAttempt("user-1", "share-1", "ACCEPTED");
+      recordAccessAttempt("user-1", "share-1", "REJECTED");
+
+      render(
+        <ShareLinkList links={[link({ id: "share-1" })]} onRevoke={jest.fn()} revokingId={null} userId="user-1" />,
+      );
+
+      expect(screen.getByText(/Accepted: 1/)).toBeInTheDocument();
+      expect(screen.getByText(/Rejected: 1/)).toBeInTheDocument();
+    });
   });
 });

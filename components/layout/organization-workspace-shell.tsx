@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { PublicShell } from "@/components/layout/public-shell";
 import { OrganizationContextProvider } from "@/lib/organization-context/context";
 import { OrganizationSwitcher } from "@/components/organizations/organization-switcher";
+import { EnvironmentContextProvider } from "@/lib/environment-context/context";
+import { EnvironmentSwitcher } from "@/components/layout/environment-switcher";
 import { readStoredOrganizationId } from "@/lib/organization-context/store";
 import { getOrganizations } from "@/lib/api/organizations";
 import type { Organization } from "@/lib/api/generated/v1";
@@ -50,20 +52,25 @@ export function OrganizationWorkspaceShell({ children }: { children: React.React
 
   return (
     <OrganizationContextProvider initialOrganizationId={initialOrganizationId}>
-      <PublicShell>
-        <div className="border-b border-white/10 bg-white/[0.02] px-4 py-3 sm:px-8">
-          {loadError ? (
-            <p className="text-xs text-rose-200" role="alert">
-              {loadError}
-            </p>
-          ) : (
-            <div className="max-w-xs">
-              <OrganizationSwitcher organizations={organizations} />
-            </div>
-          )}
-        </div>
-        {children}
-      </PublicShell>
+      <EnvironmentContextProvider>
+        <PublicShell>
+          <div className="border-b border-white/10 bg-white/[0.02] px-4 py-3 sm:px-8">
+            {loadError ? (
+              <p className="text-xs text-rose-200" role="alert">
+                {loadError}
+              </p>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="max-w-xs">
+                  <OrganizationSwitcher organizations={organizations} />
+                </div>
+                <EnvironmentSwitcher />
+              </div>
+            )}
+          </div>
+          {children}
+        </PublicShell>
+      </EnvironmentContextProvider>
     </OrganizationContextProvider>
   );
 }

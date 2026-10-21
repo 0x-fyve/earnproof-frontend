@@ -17,6 +17,25 @@ export type RotateApiKeyResponse = {
   secret: string; // Only returned once on rotation
 };
 
+export type ApiKeyOverlapStatus = "active" | "ended" | "expired";
+
+export type ApiKeyOverlap = {
+  /** The existing key kept alive for migration during the overlap window. */
+  oldKeyId: string;
+  /** The newly issued key integrations should migrate to. */
+  newApiKey: ApiKey;
+  /** ISO 8601 deadline after which the old key stops working. */
+  overlapDeadline: string;
+  status: ApiKeyOverlapStatus;
+  /** ISO 8601 timestamp of the old key's most recent successful use, if any. */
+  oldKeyLastUsedAt: string | null;
+};
+
+export type StartKeyOverlapResponse = {
+  overlap: ApiKeyOverlap;
+  secret: string; // Only returned once, for the new key
+};
+
 export type PaginatedApiKeysResponse = {
   items: ApiKey[];
   nextCursor: string | null;
@@ -109,6 +128,72 @@ export async function revokeApiKey(
     await apiClient({
       path: `/api-keys/${keyId}`,
       method: "DELETE",
+      headers: bearer(token),
+      signal,
+    });
+  }, signal);
+}
+
+/**
+ * Starts an overlap rotation: issues a new key immediately while keeping
+ * the old key valid until `overlapDeadline`, so integrations have a window
+ * to migrate instead of the old key becoming invalid the instant rotation
+ * happens (see `rotateApiKey`, which is an immediate, non-overlapping swap).
+ *
+ * `overlapHours` is clamped server-side; the client only needs to request
+ * a window, it doesn't decide the final deadline.
+ */
+export async function startKeyOverlapRotation(
+  token: string,
+  keyId: string,
+  overlapHours: number,
+  signal: AbortSignal
+): Promise<StartKeyOverlapResponse> {
+  return retryMutation(async (signal) => {
+    return apiClient<StartKeyOverlapResponse>({
+      path: `/api-keys/${keyId}/overlap-rotation`,
+      method: "POST",
+      headers: bearer(token),
+      body: JSON.stringify({ overlapHours }),
+      signal,
+    });
+  }, signal);
+}
+
+/** Fetches the current overlap state for a key that has an active or past overlap rotation. */
+export async function getKeyOverlapStatus(
+  token: string,
+  keyId: string,
+  signal: AbortSignal
+): Promise<ApiKeyOverlap | null> {
+  return retryRead(async (signal) => {
+    return apiClient<ApiKeyOverlap | null>({
+      path: `/api-keys/${keyId}/overlap-rotation`,
+      method: "GET",
+      headers: bearer(token),
+      signal,
+    });
+  }, signal);
+}
+
+/**
+ * Ends an overlap window early, immediately revoking the old key rather
+ * than waiting for `overlapDeadline`. Requires a recently-authenticated
+ * session (enforced by the caller via `useRecentAuth`/`RecentAuthGate`,
+ * and re-checked server-side).
+ *
+ * Throws if the overlap has already ended or expired — the server is the
+ * source of truth here; the client never extends or re-opens a window.
+ */
+export async function endKeyOverlapEarly(
+  token: string,
+  keyId: string,
+  signal: AbortSignal
+): Promise<ApiKeyOverlap> {
+  return retryMutation(async (signal) => {
+    return apiClient<ApiKeyOverlap>({
+      path: `/api-keys/${keyId}/overlap-rotation/end`,
+      method: "POST",
       headers: bearer(token),
       signal,
     });
