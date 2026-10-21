@@ -82,14 +82,54 @@ function validateRouteManifest() {
 
 function validateInternalLinks() {
   const { validateLinks } = require('./validate-internal-links');
-  
+
   const { errors, warnings, links } = validateLinks();
-  
+
   return {
     success: errors.length === 0,
     errors,
     warnings,
     linkCount: links.length
+  };
+}
+
+function validateRouteAuthManifest() {
+  const { generateRouteAuthManifest, validateRouteAuthManifest: validate } = require('./generate-route-auth-manifest');
+
+  console.log('Generating route authorization manifest...');
+  const manifest = generateRouteAuthManifest();
+
+  console.log(`Found ${manifest.length} routes`);
+
+  const errors = validate(manifest);
+
+  const manifestPath = path.join(APP_ROOT, 'scripts', 'route-auth-manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+  return {
+    success: errors.length === 0,
+    errors,
+    warnings: [],
+    manifest
+  };
+}
+
+function validateMockReachability() {
+  const { checkMockReachability } = require('./check-mock-reachability');
+
+  console.log('Checking for mock-provider imports reachable from production routes...');
+  const findings = checkMockReachability();
+
+  const errors = findings.map(
+    (finding) =>
+      `[MOCK_REACHABLE] ${finding.entry}: imports ${finding.mockNames.join(', ')} via ${finding.chain.join(' -> ')}`,
+  );
+
+  return {
+    success: errors.length === 0,
+    errors,
+    warnings: [],
+    findings
   };
 }
 
@@ -171,6 +211,8 @@ function main() {
   
   const results = {
     routeManifest: runValidation('Route Manifest & Metadata', validateRouteManifest),
+    routeAuthManifest: runValidation('Route Authorization Manifest (#332)', validateRouteAuthManifest),
+    mockReachability: runValidation('Mock Provider Reachability (#333)', validateMockReachability),
     internalLinks: runValidation('Internal Link Validation', validateInternalLinks),
     storageSchemas: runValidation('Storage Schema Validation', validateStorageSchemas)
   };
@@ -240,6 +282,8 @@ if (require.main === module) {
 
 module.exports = {
   validateRouteManifest,
+  validateRouteAuthManifest,
+  validateMockReachability,
   validateInternalLinks,
   validateStorageSchemas,
   runValidation

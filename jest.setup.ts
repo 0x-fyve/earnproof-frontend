@@ -1,6 +1,14 @@
 import "@testing-library/jest-dom";
 import { TextEncoder, TextDecoder } from "node:util";
 import { webcrypto } from "node:crypto";
+import { ReadableStream } from "node:stream/web";
+
+// jsdom doesn't implement the Streams API; Node's node:stream/web does.
+// Needed by TestResponse's body getter below, mirroring a real fetch
+// Response's streamable body (lib/api/client.ts's bounded-read path, #328).
+if (typeof globalThis.ReadableStream === "undefined") {
+  globalThis.ReadableStream = ReadableStream as unknown as typeof globalThis.ReadableStream;
+}
 
 // jsdom doesn't implement TextEncoder/TextDecoder; Node's util module does.
 // Needed by anything that pulls in lib/validation/qr-payload.ts (byte-length
@@ -32,12 +40,39 @@ if (typeof globalThis.Response === "undefined") {
   class TestResponse {
     readonly status: number;
     readonly ok: boolean;
+    readonly headers: Headers;
     private readonly bodyText: string;
 
     constructor(body: BodyInit | null = null, init: ResponseInit = {}) {
       this.status = init.status ?? 200;
       this.ok = this.status >= 200 && this.status < 300;
       this.bodyText = typeof body === "string" ? body : "";
+      this.headers = new Headers(init.headers);
+      // Real fetch Responses report Content-Length; mirror that here so
+      // code that preflights on it (e.g. lib/api/client.ts's #328 size
+      // budget) sees realistic behavior under test.
+      if (!this.headers.has("content-length") && this.bodyText.length > 0) {
+        this.headers.set(
+          "content-length",
+          String(new TextEncoder().encode(this.bodyText).byteLength),
+        );
+      }
+    }
+
+    get body(): ReadableStream<Uint8Array> | null {
+      if (this.bodyText.length === 0) return null;
+      const bytes = new TextEncoder().encode(this.bodyText);
+      let sent = false;
+      return new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (!sent) {
+            controller.enqueue(bytes);
+            sent = true;
+          } else {
+            controller.close();
+          }
+        },
+      });
     }
 
     async json(): Promise<unknown> {
