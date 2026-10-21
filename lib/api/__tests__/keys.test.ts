@@ -210,25 +210,29 @@ describe("API Key Utilities", () => {
       global.fetch = originalFetch;
     });
 
+    // A real Response (not a partial mock) so the client's bounded-read /
+    // content-type contract (#328) is exercised the same way it is in
+    // production.
+    function jsonResponse(body: unknown): Response {
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
     it("resolves with the list when every item matches the ApiKey schema", async () => {
       const apiKeys = [
         { id: "k1", name: "Key One", prefix: "ep_1", scopes: ["proofs:read"], createdAt: null },
       ];
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        headers: new Headers(),
-        json: async () => apiKeys,
-      } as Response);
+      global.fetch = jest.fn().mockResolvedValue(jsonResponse(apiKeys));
 
       await expect(getApiKeys("token", new AbortController().signal)).resolves.toEqual(apiKeys);
     });
 
     it("rejects with ApiResponseValidationError when an item is missing a required field", async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        headers: new Headers(),
-        json: async () => [{ id: "k1", scopes: ["proofs:read"] }], // missing name, prefix
-      } as Response);
+      global.fetch = jest.fn().mockResolvedValue(
+        jsonResponse([{ id: "k1", scopes: ["proofs:read"] }]), // missing name, prefix
+      );
 
       await expect(getApiKeys("token", new AbortController().signal)).rejects.toBeInstanceOf(
         ApiResponseValidationError,
@@ -236,11 +240,7 @@ describe("API Key Utilities", () => {
     });
 
     it("rejects with ApiResponseValidationError when the response is not an array at all", async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        headers: new Headers(),
-        json: async () => ({ unexpected: "shape" }),
-      } as Response);
+      global.fetch = jest.fn().mockResolvedValue(jsonResponse({ unexpected: "shape" }));
 
       await expect(getApiKeys("token", new AbortController().signal)).rejects.toBeInstanceOf(
         ApiResponseValidationError,
