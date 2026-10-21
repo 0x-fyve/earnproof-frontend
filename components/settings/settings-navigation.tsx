@@ -54,6 +54,11 @@ const navigationItems = [
     href: "/settings/usage",
     description: "Track quota usage and request rate limits",
   },
+  {
+    name: "Job Executions",
+    href: "/settings/jobs",
+    description: "Monitor recent background job executions and their outcomes",
+  },
 ];
 
 const personalItems = [
