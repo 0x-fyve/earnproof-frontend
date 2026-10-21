@@ -41,9 +41,9 @@ export function KeyActivityDetailView({ keyId }: { keyId: string }) {
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
-    setDetail(null);
-    setError(null);
     void (async () => {
+      setDetail(null);
+      setError(null);
       try {
         const result = await fetchMockKeyActivity(keyId, { signal: controller.signal });
         if (!cancelled) {

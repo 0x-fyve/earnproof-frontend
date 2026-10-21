@@ -74,9 +74,15 @@ export function OnboardingReadinessChecklist({
   }, [organizationId, viewerRole]);
 
   useEffect(() => {
-    if (!initialChecklist) {
-      void load();
-    }
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active && !initialChecklist) {
+        void load();
+      }
+    });
+    return () => {
+      active = false;
+    };
     // Refetch whenever the organization or viewer role changes, matching the
     // "refetch on organization/member/key change" requirement as closely as
     // a mock API without a push channel allows.

@@ -108,8 +108,14 @@ export function JobExecutionMonitor() {
   );
 
   useEffect(() => {
-    void loadPage(cursorStack[cursorIndex]);
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) {
+        void loadPage(cursorStack[cursorIndex]);
+      }
+    });
     return () => {
+      active = false;
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }

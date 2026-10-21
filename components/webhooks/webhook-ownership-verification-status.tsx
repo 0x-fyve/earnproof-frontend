@@ -51,6 +51,7 @@ export function WebhookOwnershipVerificationStatus({
   const [actionLoading, setActionLoading] = useState(false);
 
   const load = useCallback(async () => {
+    setVerification(null);
     setError(null);
     setForbidden(false);
     try {
@@ -66,8 +67,15 @@ export function WebhookOwnershipVerificationStatus({
   }, [webhookId, url]);
 
   useEffect(() => {
-    setVerification(null);
-    void load();
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) {
+        void load();
+      }
+    });
+    return () => {
+      active = false;
+    };
     // Re-fetch (and the URL-change invalidation itself is modeled server
     // side in the fixtures) whenever the destination URL changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
