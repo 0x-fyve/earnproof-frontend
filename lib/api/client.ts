@@ -1,8 +1,10 @@
+import type { ZodType } from "zod";
 import { appConfig } from "@/config/app";
 import { ApiError, ApiResponseContractError, extractSafeErrorReference } from "@/lib/errors";
 import { categorizeError, reportClientError } from "@/lib/telemetry";
 import { ApiNetworkError, recordNetworkFailure, recordNetworkSuccess, dedupRequest } from "@/lib/network";
 import { withConcurrencyLimit, type ClientRequestPriority } from "@/lib/network/concurrency-limiter";
+import { ApiResponseValidationError, validateApiResponse } from "@/lib/validation/runtime-response";
 import { parseDeprecationHeaders } from "./deprecation-warnings";
 import { recordDeprecationWarning } from "./use-deprecation-warning";
 
@@ -194,6 +196,13 @@ type ApiClientOptions = RequestInit & {
    * that must not join a stale in-flight request). Default: false.
    */
   skipCoalescing?: boolean;
+  /**
+   * Optional Zod schema to validate the parsed response body against
+   * before it's handed back to the caller (#327). Omitted by default so
+   * existing call sites are unaffected; a caller opts in per endpoint by
+   * passing one.
+   */
+  responseSchema?: ZodType<unknown>;
 };
 
 /**
@@ -314,6 +323,7 @@ async function apiClientImpl<TResponse>({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxResponseBytes = DEFAULT_MAX_RESPONSE_BYTES,
   allowEmptyBody = false,
+  responseSchema,
   ...init
 }: ApiClientOptions): Promise<TResponse> {
   let response: Response;
@@ -396,8 +406,9 @@ async function apiClientImpl<TResponse>({
     recordDeprecationWarning(deprecationWarning);
   }
 
+  let body: TResponse;
   try {
-    return await readJsonResponseBody<TResponse>(response, {
+    body = await readJsonResponseBody<TResponse>(response, {
       maxResponseBytes,
       allowEmptyBody,
     });
@@ -409,6 +420,28 @@ async function apiClientImpl<TResponse>({
     });
     throw error;
   }
+
+  if (responseSchema) {
+    try {
+      return validateApiResponse(responseSchema, body) as TResponse;
+    } catch (error) {
+      if (error instanceof ApiResponseValidationError) {
+        // Fail closed (#327): a 200 whose body doesn't match the declared
+        // schema is treated as a failure, not handed to the caller as
+        // trusted data. Reported like any other client error, but the
+        // error object itself carries only field paths/messages - never
+        // the body - so logging/telemetry can't leak response contents.
+        reportClientError({
+          error,
+          category: categorizeError(error, response),
+          pathname: currentPathname(),
+        });
+      }
+      throw error;
+    }
+  }
+
+  return body;
 }
 
 /**
