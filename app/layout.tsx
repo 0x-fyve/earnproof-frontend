@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ContractMigrationStatusBanner } from "@/components/common/contract-migration-banner";
 import { WebVitalsReporter } from "@/components/common/web-vitals-reporter";
 import { PrivacyProvider } from "@/contexts/privacy-context";
+import { AppQueryProvider } from "@/lib/query/provider";
 import "./globals.css";
 
 // Mirrors lib/storage's STORAGE_KEYS.DISPLAY_PREFERENCES: a plain <script>
@@ -72,11 +73,13 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <PrivacyProvider>
-          <WebVitalsReporter />
-          <ContractMigrationStatusBanner />
-          {children}
-        </PrivacyProvider>
+        <AppQueryProvider>
+          <PrivacyProvider>
+            <WebVitalsReporter />
+            <ContractMigrationStatusBanner />
+            {children}
+          </PrivacyProvider>
+        </AppQueryProvider>
         <script
           nonce={nonce}
           dangerouslySetInnerHTML={{ __html: DISPLAY_PREFERENCES_BOOTSTRAP_SCRIPT }}
