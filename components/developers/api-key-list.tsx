@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { formatApiKeyPrefix, rotateApiKey, revokeApiKey } from "@/lib/api/keys";
+import { formatApiKeyPrefix, hasKnownCreationDate, rotateApiKey, revokeApiKey } from "@/lib/api/keys";
 import { getExpirationStatus, isApiKeyValid } from "@/lib/api/api-key-expiration";
 import { Redacted } from "@/components/common/redacted";
 import { ConfirmationDialog } from "@/components/common/confirmation-dialog";
@@ -12,6 +12,7 @@ import { OneTimeSecret } from "./one-time-secret";
 import { KeyOverlapRotationDialog } from "./key-overlap-rotation";
 import { KeyActivityDetailView } from "./key-activity-detail";
 import { formatDate, formatMessage, formatRelativeTime } from "@/lib/i18n";
+import { formatDateTimeWithZone } from "@/lib/i18n/format";
 import { useRecentAuth } from "@/lib/auth/recent-auth";
 import { signWithFreighter } from "@/lib/wallet/sign-message";
 import type { ApiKey } from "@/lib/api/generated/v1";
@@ -413,8 +414,13 @@ function ApiKeyRow({
       <div>
         <div className="text-slate-300 md:hidden font-semibold">Created:</div>
         <div className="text-slate-400">
-          {/* Using a placeholder date since it's not in the API response */}
-          Recently
+          {hasKnownCreationDate(apiKey) ? (
+            formatDateTimeWithZone(apiKey.createdAt as string)
+          ) : (
+            <span className="italic" title="This key was created before creation timestamps were tracked.">
+              Unavailable
+            </span>
+          )}
         </div>
       </div>
 

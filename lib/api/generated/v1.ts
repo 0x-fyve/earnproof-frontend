@@ -129,7 +129,7 @@ export interface VerificationSource {
   id: string;
   type: "issuer" | "contract" | "stellar_account" | "backend_registry";
   status: "verified" | "unavailable" | "failed";
-  name: string;
+  name?: string;
   description?: string;
 }
 
@@ -156,11 +156,11 @@ export interface MissingProvenanceLink {
 }
 
 export interface ProvenianceChain {
-  sources: VerificationSource[];
-  checkpoints: VerificationCheckpoint[];
-  observations: VerificationObservation[];
-  verificationPath: string[];
-  missingLinks: MissingProvenanceLink[];
+  sources: Array<VerificationSource>;
+  checkpoints: Array<VerificationCheckpoint>;
+  observations: Array<VerificationObservation>;
+  verificationPath: Array<string>;
+  missingLinks?: Array<MissingProvenanceLink>;
 }
 
 export interface VerifyProofResponse {
@@ -206,6 +206,7 @@ export interface ApiKey {
   prefix: string;
   scopes: Array<string>;
   expiresAt?: string | null;
+  createdAt?: string | null;
 }
 
 export interface CreateWebhookRequest {
