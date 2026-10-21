@@ -1,4 +1,3 @@
-import { describe, it, expect, vi } from "vitest";
 import {
   isMutationSafeToRetry,
   shouldExposeRetry,
@@ -14,7 +13,7 @@ describe("retry-orchestrator", () => {
       const request: RetryableRequest = {
         method: "GET",
         hasIdempotencyContract: false,
-        execute: vi.fn(),
+        execute: jest.fn(),
       };
       expect(isMutationSafeToRetry(request)).toBe(true);
     });
@@ -23,7 +22,7 @@ describe("retry-orchestrator", () => {
       const request: RetryableRequest = {
         method: "HEAD",
         hasIdempotencyContract: false,
-        execute: vi.fn(),
+        execute: jest.fn(),
       };
       expect(isMutationSafeToRetry(request)).toBe(true);
     });
@@ -32,7 +31,7 @@ describe("retry-orchestrator", () => {
       const request: RetryableRequest = {
         method: "DELETE",
         hasIdempotencyContract: false,
-        execute: vi.fn(),
+        execute: jest.fn(),
       };
       expect(isMutationSafeToRetry(request)).toBe(true);
     });
@@ -41,7 +40,7 @@ describe("retry-orchestrator", () => {
       const request: RetryableRequest = {
         method: "POST",
         hasIdempotencyContract: true,
-        execute: vi.fn(),
+        execute: jest.fn(),
       };
       expect(isMutationSafeToRetry(request)).toBe(true);
     });
@@ -50,7 +49,7 @@ describe("retry-orchestrator", () => {
       const request: RetryableRequest = {
         method: "POST",
         hasIdempotencyContract: false,
-        execute: vi.fn(),
+        execute: jest.fn(),
       };
       expect(isMutationSafeToRetry(request)).toBe(false);
     });
@@ -59,7 +58,7 @@ describe("retry-orchestrator", () => {
       const request: RetryableRequest = {
         method: "PUT",
         hasIdempotencyContract: false,
-        execute: vi.fn(),
+        execute: jest.fn(),
       };
       expect(isMutationSafeToRetry(request)).toBe(false);
     });
@@ -68,17 +67,20 @@ describe("retry-orchestrator", () => {
       const request: RetryableRequest = {
         method: "PATCH",
         hasIdempotencyContract: false,
-        execute: vi.fn(),
+        execute: jest.fn(),
       };
       expect(isMutationSafeToRetry(request)).toBe(false);
     });
   });
 
   describe("shouldExposeRetry", () => {
-    const createRequest = (method = "GET", hasIdempotency = false): RetryableRequest => ({
+    const createRequest = (
+      method = "GET",
+      hasIdempotency = false,
+    ): RetryableRequest => ({
       method,
       hasIdempotencyContract: hasIdempotency,
-      execute: vi.fn(),
+      execute: jest.fn(),
     });
 
     it("exposes retry for idempotent GET with offline failure", () => {
@@ -111,7 +113,9 @@ describe("retry-orchestrator", () => {
 
     it("never exposes retry for cancelled request", () => {
       const request = createRequest("GET");
-      const error = new ApiNetworkError(new DOMException("Aborted", "AbortError"));
+      const error = new ApiNetworkError(
+        new DOMException("Aborted", "AbortError"),
+      );
 
       expect(shouldExposeRetry(request, error)).toBe(false);
     });
@@ -134,7 +138,9 @@ describe("retry-orchestrator", () => {
     });
 
     it("returns timeout action for timeout errors", () => {
-      const error = new ApiNetworkError(new DOMException("Timeout", "TimeoutError"));
+      const error = new ApiNetworkError(
+        new DOMException("Timeout", "TimeoutError"),
+      );
       const action = getRecoveryAction(error);
 
       expect(action.canRetry).toBe(true);
@@ -164,11 +170,33 @@ describe("retry-orchestrator", () => {
       expect(action.canRetry).toBe(false);
       expect(action.message).toContain("Invalid input");
     });
+
+    it("surfaces retryAfterMs countdown metadata for a 429 with Retry-After", () => {
+      const response = {
+        status: 429,
+        headers: new Headers({ "Retry-After": "30" }),
+      } as Response;
+      const error = new ApiNetworkError(new Error("429"), response);
+      const action = getRecoveryAction(error);
+
+      expect(action.canRetry).toBe(true);
+      expect(action.retryAfterMs).toBe(30_000);
+      expect(action.message).toContain("30s");
+    });
+
+    it("omits retryAfterMs when the 5xx response has no Retry-After header", () => {
+      const response = { status: 503, headers: new Headers() } as Response;
+      const error = new ApiNetworkError(new Error("503"), response);
+      const action = getRecoveryAction(error);
+
+      expect(action.canRetry).toBe(true);
+      expect(action.retryAfterMs).toBeNull();
+    });
   });
 
   describe("executeWithRetry", () => {
     it("executes request and returns result on success", async () => {
-      const execute = vi.fn(async () => "success");
+      const execute = jest.fn(async () => "success");
       const request: RetryableRequest = {
         method: "GET",
         hasIdempotencyContract: false,
@@ -178,12 +206,12 @@ describe("retry-orchestrator", () => {
       const result = await executeWithRetry(request);
 
       expect(result).toBe("success");
-      expect(execute).toHaveBeenCalledOnce();
+      expect(execute).toHaveBeenCalledTimes(1);
     });
 
     it("retries on retryable failures", async () => {
       let attempt = 0;
-      const execute = vi.fn(async () => {
+      const execute = jest.fn(async () => {
         attempt++;
         if (attempt < 2) {
           throw new ApiNetworkError(new TypeError("offline"));
@@ -204,7 +232,7 @@ describe("retry-orchestrator", () => {
     });
 
     it("does not retry on auth failure", async () => {
-      const execute = vi.fn(async () => {
+      const execute = jest.fn(async () => {
         throw new ApiNetworkError(new Error("401"), { status: 401 });
       });
 
@@ -220,11 +248,11 @@ describe("retry-orchestrator", () => {
         expect(error).toBeInstanceOf(ApiNetworkError);
       }
 
-      expect(execute).toHaveBeenCalledOnce();
+      expect(execute).toHaveBeenCalledTimes(1);
     });
 
     it("does not retry non-idempotent mutations", async () => {
-      const execute = vi.fn(async () => {
+      const execute = jest.fn(async () => {
         throw new ApiNetworkError(new TypeError("offline"));
       });
 
@@ -240,11 +268,11 @@ describe("retry-orchestrator", () => {
         expect(error).toBeInstanceOf(ApiNetworkError);
       }
 
-      expect(execute).toHaveBeenCalledOnce();
+      expect(execute).toHaveBeenCalledTimes(1);
     });
 
     it("respects maxAttempts", async () => {
-      const execute = vi.fn(async () => {
+      const execute = jest.fn(async () => {
         throw new ApiNetworkError(new TypeError("offline"));
       });
 
@@ -265,7 +293,7 @@ describe("retry-orchestrator", () => {
 
     it("respects maxDelayMs", async () => {
       let attempt = 0;
-      const execute = vi.fn(async () => {
+      const execute = jest.fn(async () => {
         attempt++;
         if (attempt < 5) {
           throw new ApiNetworkError(new TypeError("offline"));
