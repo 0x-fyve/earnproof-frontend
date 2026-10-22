@@ -40,6 +40,9 @@ const navigationItems = [
     description: "View and revoke active sessions on other devices",
   },
   {
+    name: "Security Notifications",
+    href: "/settings/notifications",
+    description: "Inspect tenant-scoped security notices and incident acknowledgements",
     name: "Schema Import",
     href: "/settings/schemas",
     description: "Validate schema metadata and policy mappings before importing them into your organization",

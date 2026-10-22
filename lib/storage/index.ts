@@ -16,12 +16,39 @@ export const STORAGE_KEYS = {
   FORM_DRAFTS: 'earnproof.form-drafts' as const,
   DISPLAY_PREFERENCES: 'earnproof.display-preferences' as const,
   PROOF_DRAFTS: 'earnproof.proof-drafts' as const,
+  TRANSACTION_OPERATIONS: 'earnproof.transaction-operations' as const,
   QUICKSTART_PROGRESS: 'earnproof.quickstart-progress' as const,
 } as const;
 
 export type StorageKey = keyof typeof STORAGE_KEYS;
 
 export type DisplayPreferenceMode = 'system' | 'enabled' | 'disabled';
+
+export interface PersistedTransactionOperationRef {
+  operationId: string;
+  transactionHash: string;
+  network: 'testnet' | 'public';
+  status:
+    | 'submitted'
+    | 'included'
+    | 'finalized'
+    | 'failed'
+    | 'replaced'
+    | 'timed-out';
+  resourceType: string;
+  resourceId: string;
+  resourceHref: string | null;
+  ledger: number | null;
+  confirmations: number;
+  requiredConfirmations: number;
+  replacedByHash: string | null;
+  diagnosticMessage: string | null;
+  reorgCount: number;
+  submittedAt: string;
+  updatedAt: string;
+  timeoutAt: string;
+  expiresAt: string;
+}
 
 export interface StorageSchema {
   FORM_DRAFTS: {
@@ -40,6 +67,9 @@ export interface StorageSchema {
     // Each draft stores non-secret field values with an explicit retention limit.
     data: Record<string, { savedAt: string; expiresAt: string; values: unknown }>;
   };
+  TRANSACTION_OPERATIONS: {
+    // Keyed by operationId; stores only non-sensitive operation references with bounded expiry.
+    data: Record<string, PersistedTransactionOperationRef>;
   QUICKSTART_PROGRESS: {
     // Checklist step ids only (see lib/developers/quickstart.ts's
     // QUICKSTART_STEPS) - never an API secret, key id, or request payload.
@@ -52,6 +82,7 @@ export const CURRENT_VERSIONS: Record<StorageKey, number> = {
   FORM_DRAFTS: 1,
   DISPLAY_PREFERENCES: 1,
   PROOF_DRAFTS: 1,
+  TRANSACTION_OPERATIONS: 1,
   QUICKSTART_PROGRESS: 1,
 };
 
@@ -125,6 +156,7 @@ export const migrations: Record<StorageKey, Record<number, StorageMigration>> = 
     // Version 1 is current - no migration needed
     1: (data) => data,
   },
+  TRANSACTION_OPERATIONS: {
   QUICKSTART_PROGRESS: {
     // Version 1 is current - no migration needed
     1: (data) => data,
