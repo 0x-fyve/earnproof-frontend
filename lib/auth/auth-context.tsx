@@ -179,12 +179,15 @@ export function AuthSessionProvider({
         const message = error instanceof Error ? error.message : 'Recovery failed';
         setRecoveryError(message);
         setIsRecovering(false);
+        // The server rejected the session and it could not be recovered:
+        // treat it as revoked in every tab (#274). Downgrade only.
+        multiTabSync.broadcast('session_expired');
         throw error;
       }
 
       setIsRecovering(false);
     },
-    [coordinator],
+    [coordinator, multiTabSync],
   );
 
   const invalidateWalletData = useCallback(

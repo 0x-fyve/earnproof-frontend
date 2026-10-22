@@ -20,6 +20,19 @@ The bearer token and signed-in user profile are held **in memory only** (`lib/se
 
 Everything else the app persists is listed in [`lib/storage/registry.json`](../lib/storage/registry.json): key, area, scope, classification, schema version, owner, declared accessor files, retention and cleanup. See [Storage schema validation](./storage-schema-validation.md) for how this is enforced.
 
+### Cross-tab sync message (`earnproof.tab-sync.v1`)
+
+**Purpose:** Storage-event fallback for cross-tab auth/tenant sync when
+`BroadcastChannel` is unavailable ([docs/cross-tab-sync.md](./cross-tab-sync.md)).
+
+**Data:** `{ v, type, epoch, tabId, tenantId?, ts }` only: an event type,
+a logical clock value, a random per-tab id, an optional organization id and a
+timestamp. No token, session id, wallet address or claim value. Messages
+with any other field are rejected.
+
+**Retention:** None at rest. The value is written and removed in the same
+call, existing only long enough to fire a `storage` event in other tabs.
+
 ## What We Explicitly Do NOT Store
 
 ### Sensitive Financial Data

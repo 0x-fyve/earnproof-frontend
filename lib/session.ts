@@ -18,6 +18,7 @@
  * material) so every other open tab clears its own in-memory session too.
  */
 
+import { getTabSyncCoordinator } from "@/lib/auth/tab-sync-coordinator";
 import { MultiTabSync, type SyncMessage } from "@/lib/auth/multi-tab-sync";
 import { TokenManager } from "@/lib/auth/token-manager";
 
@@ -137,6 +138,22 @@ export function readStoredSession(): Session | null {
 }
 
 /**
+ * Clear the stored session from localStorage and tell other open tabs the
+ * wallet logged out (#274), so they drop their in-memory auth and
+ * tenant-scoped state too.
+ *
+ * Pass `{ broadcast: false }` when clearing in response to a message that
+ * came from another tab, so tabs never echo a logout back and forth.
+ */
+export function clearStoredSession({ broadcast = true }: { broadcast?: boolean } = {}): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(SESSION_KEY);
+  if (broadcast) {
+    getTabSyncCoordinator()?.publish("wallet_logout");
+  }
  * Keep a session in memory.
  *
  * @param session Session to keep
