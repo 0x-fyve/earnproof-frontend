@@ -5,6 +5,7 @@ import { PageHeading } from "@/components/common/page-heading";
 import { pageContainer } from "@/components/common/production-ui";
 import { PublicShell } from "@/components/layout/public-shell";
 import { PaymentEligibilityPanel } from "@/components/payments/payment-eligibility-panel";
+import { PaymentOperationEvidenceViewer } from "@/components/payments/payment-operation-evidence-viewer";
 import { readStoredSession } from "@/lib/session";
 
 export default function PaymentDetailPage({ params }: { params: { id: string } }) {
@@ -28,6 +29,7 @@ export default function PaymentDetailPage({ params }: { params: { id: string } }
             >
               Refresh
             </button>
+            <PaymentOperationEvidenceViewer token={token} paymentId={params.id} />
             <PaymentEligibilityPanel
               token={token}
               paymentId={params.id}

@@ -12,6 +12,8 @@ import { SessionList } from "./session-list";
 import { SessionRiskHistory } from "./session-risk-history";
 
 const SESSION_KEY = "earnproof.session";
+import { listActiveSessions, type SessionRecord } from "@/lib/sessions/store";
+import { readStoredSession } from "@/lib/session";
 
 type SessionData = {
   token: string;
@@ -52,6 +54,7 @@ export function SessionManagement({
   viewerOrganizationId: propViewerOrgId,
   lastVerifiedAtMs: propLastVerifiedAtMs,
 }: SessionManagementProps = {}) {
+export function SessionManagement() {
   const [session] = useState<SessionData | null>(() => readStoredSession());
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [revokedSessions, setRevokedSessions] = useState<SessionRecord[]>([]);

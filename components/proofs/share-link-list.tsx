@@ -3,6 +3,8 @@
 import { formatDate } from "@/lib/i18n";
 import type { ShareLinkWithStatus } from "@/lib/proof-sharing/store";
 import type { ShareLinkStatus } from "@/lib/validation/proof-sharing";
+import { summarizeAccessHistory } from "@/lib/proof-sharing/access-history";
+import { ShareLinkAccessInsights } from "./share-link-access-insights";
 
 const STATUS_STYLES: Record<ShareLinkStatus, string> = {
   ACTIVE: "border-emerald-300/30 bg-emerald-300/10 text-emerald-200",
@@ -20,10 +22,13 @@ export function ShareLinkList({
   links,
   onRevoke,
   revokingId,
+  userId,
 }: {
   links: ShareLinkWithStatus[];
   onRevoke: (id: string) => void;
   revokingId: string | null;
+  /** When provided, each link also shows its access history / revocation insights. */
+  userId?: string;
 }) {
   if (links.length === 0) {
     return (
@@ -68,6 +73,7 @@ export function ShareLinkList({
               </dd>
             </div>
           </dl>
+          {userId ? <ShareLinkAccessInsights summary={summarizeAccessHistory(userId, link)} /> : null}
         </li>
       ))}
     </ul>

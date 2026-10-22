@@ -19,6 +19,18 @@ export default function SecurityNotificationsPage() {
           title="Security Notification Inbox"
         />
         <SecurityNotificationInbox />
+import { NotificationPreferencesSettingsPanel } from "@/components/settings/notification-preferences-panel";
+
+export default function NotificationPreferencesSettingsPage() {
+  return (
+    <PublicShell>
+      <section className={pageContainer}>
+        <PageHeading
+          eyebrow="Security"
+          title="Notification preferences"
+          description="Control how you're notified about session, key, webhook, proof, and governance events. Some categories are mandatory and protect your account."
+        />
+        <NotificationPreferencesSettingsPanel />
       </section>
     </PublicShell>
   );

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { WalletRotationManagement } from "../wallet-rotation-management";
+import { storeSession } from "@/lib/session";
 
-const SESSION_KEY = "earnproof.session";
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -15,13 +15,10 @@ describe("WalletRotationManagement", () => {
   });
 
   it("renders the rotation flow for an authenticated session", () => {
-    window.localStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify({
+    storeSession({
         token: "tok",
         user: { id: "u1", walletAddress: "GWALLET1234567890", role: "MEMBER" },
-      }),
-    );
+      });
 
     render(<WalletRotationManagement />);
 

@@ -201,7 +201,7 @@ The system automatically syncs logout, token rotation, and wallet changes across
 ### Before: Direct localStorage + apiClient
 
 ```tsx
-// Old pattern
+// Old pattern (removed: bearer tokens are never persisted, see docs/privacy.md)
 const session = JSON.parse(localStorage.getItem('earnproof.session') || '{}');
 const token = session.token;
 
@@ -212,6 +212,9 @@ await apiClient({
 
 // Logout
 localStorage.removeItem('earnproof.session');
+
+// Today: readStoredSession() / storeSession() / clearStoredSession() from
+// "@/lib/session" keep the session in memory via the TokenManager.
 ```
 
 ### After: Auth context + authenticatedApiClient
