@@ -116,3 +116,15 @@ if (typeof window.matchMedia === "undefined") {
     dispatchEvent: jest.fn(),
   })) as unknown as typeof window.matchMedia;
 }
+
+// The session lives in memory (never in browser storage), so it survives
+// between tests in a file unless it is reset explicitly. Required lazily so a
+// test file's own jest.mock() calls still apply to lib/session's dependencies.
+function resetSession() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const session = require("@/lib/session") as Partial<typeof import("@/lib/session")>;
+  // Some suites replace lib/session with a partial mock; nothing to reset there.
+  session.resetSessionForTests?.();
+}
+beforeEach(resetSession);
+afterEach(resetSession);

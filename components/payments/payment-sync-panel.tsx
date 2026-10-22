@@ -3,8 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { classifySyncOutcome, syncPayments, type PaymentSyncOutcome } from "@/lib/api/payments";
 import type { PaymentSyncResult } from "@/lib/api/generated/v1";
-
-const SESSION_KEY = "earnproof.session";
+import { readStoredSession } from "@/lib/session";
 
 type SessionData = {
   token: string;
@@ -13,24 +12,6 @@ type SessionData = {
     role: string;
   };
 };
-
-function readStoredSession(): SessionData | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const stored = window.localStorage.getItem(SESSION_KEY);
-  if (!stored) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(stored) as SessionData;
-  } catch {
-    window.localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-}
 
 type SyncPhase = "idle" | "syncing" | "succeeded" | "failed";
 

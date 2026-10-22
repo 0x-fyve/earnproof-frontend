@@ -7,6 +7,8 @@ import { ActivityLogGate } from "@/components/activity/activity-log-gate";
 import { fetchActivityEvents } from "@/lib/api/activity";
 import { fetchMockCapabilityDocument, CAPABILITY_DOCUMENT_SHAPE_VERSION } from "@/lib/api/capabilities";
 import { API_SPEC_VERSION } from "@/lib/api/generated/v1";
+import { storeSession } from "@/lib/session";
+import { FIXTURE_USER, SYNTHETIC_TOKEN, fetchedPage } from "@/tests/fixtures/activity-fixtures";
 
 jest.mock("@/lib/api/capabilities", () => ({
   ...jest.requireActual("@/lib/api/capabilities"),
@@ -29,7 +31,8 @@ beforeEach(() => {
   window.localStorage.clear();
   mockedFetchCapabilities.mockReset();
   mockedFetchActivityEvents.mockReset();
-  mockedFetchActivityEvents.mockResolvedValue({ events: [], nextCursor: null });
+  mockedFetchActivityEvents.mockResolvedValue(fetchedPage({ events: [] }));
+  storeSession({ token: SYNTHETIC_TOKEN, user: FIXTURE_USER });
 });
 
 describe("ActivityLogGate", () => {
