@@ -32,12 +32,25 @@ export async function listPayments(token: string, signal: AbortSignal): Promise<
  * lib/payment-backfill/store.ts for how the bounded-range request/job
  * lifecycle this issue asks for is layered on top of this call.
  */
-export async function syncPayments(token: string, signal: AbortSignal): Promise<PaymentSyncResult> {
+/**
+ * `idempotencyKey` (#254) is sent as a forward-compatible `Idempotency-Key`
+ * header, the same deliberately-defensive treatment as
+ * lib/proofs/idempotency.ts gives proof-creation requests: the real
+ * `POST /payments/sync` endpoint does not yet define this header in the
+ * OpenAPI spec, so sending it is harmless today and lets the backend start
+ * deduplicating retries the moment it honors one, with no frontend change.
+ * Omitting it preserves this function's existing behavior exactly.
+ */
+export async function syncPayments(
+  token: string,
+  signal: AbortSignal,
+  idempotencyKey?: string,
+): Promise<PaymentSyncResult> {
   return retryMutation(async (signal) => {
     return apiClient<PaymentSyncResult>({
       path: "/payments/sync",
       method: "POST",
-      headers: bearer(token),
+      headers: idempotencyKey ? { ...bearer(token), "Idempotency-Key": idempotencyKey } : bearer(token),
       signal,
     });
   }, signal);

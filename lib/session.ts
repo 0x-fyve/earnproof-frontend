@@ -154,6 +154,9 @@ export function clearStoredSession({ broadcast = true }: { broadcast?: boolean }
   if (broadcast) {
     getTabSyncCoordinator()?.publish("wallet_logout");
   }
+}
+
+/**
  * Keep a session in memory.
  *
  * @param session Session to keep
