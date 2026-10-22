@@ -934,3 +934,91 @@ describe("ApiKeyList revoke with recent-auth", () => {
     expect(mockRevokeApiKey).not.toHaveBeenCalled();
   });
 });
+
+describe("ApiKeyList created-at display (#323)", () => {
+  it("renders the real creation timestamp, with timezone disclosed, when createdAt is present", () => {
+    render(
+      <ApiKeyList
+        apiKeys={[{ ...mockApiKey, createdAt: "2026-01-15T09:30:00.000Z" }]}
+        loading={false}
+        token={mockToken}
+        walletAddress={mockWalletAddress}
+        paginationState={defaultPaginationState}
+        onPreviousPage={jest.fn()}
+        onNextPage={jest.fn()}
+        focusResults={false}
+        onKeyUpdated={jest.fn()}
+        onKeyRevoked={jest.fn()}
+      />,
+    );
+
+    // formatDateTimeWithZone appends an explicit zone abbreviation (e.g.
+    // "UTC"/"GMT"), so the rendered text is never a bare, ambiguous
+    // wall-clock time (#323's "preserve timezone disclosure" criterion).
+    // "Recently" (the old placeholder) must never reappear.
+    expect(screen.queryByText("Recently")).not.toBeInTheDocument();
+    expect(screen.getByText(/Jan 15, 2026/)).toBeInTheDocument();
+  });
+
+  it("renders an explicit unavailable state, not a guessed date, when createdAt is null", () => {
+    render(
+      <ApiKeyList
+        apiKeys={[{ ...mockApiKey, createdAt: null }]}
+        loading={false}
+        token={mockToken}
+        walletAddress={mockWalletAddress}
+        paginationState={defaultPaginationState}
+        onPreviousPage={jest.fn()}
+        onNextPage={jest.fn()}
+        focusResults={false}
+        onKeyUpdated={jest.fn()}
+        onKeyRevoked={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("Recently")).not.toBeInTheDocument();
+  });
+
+  it("renders an explicit unavailable state when createdAt is absent entirely (pre-field-existing key)", () => {
+    const keyWithoutField = { ...mockApiKey };
+    delete (keyWithoutField as Partial<ApiKey>).createdAt;
+
+    render(
+      <ApiKeyList
+        apiKeys={[keyWithoutField]}
+        loading={false}
+        token={mockToken}
+        walletAddress={mockWalletAddress}
+        paginationState={defaultPaginationState}
+        onPreviousPage={jest.fn()}
+        onNextPage={jest.fn()}
+        focusResults={false}
+        onKeyUpdated={jest.fn()}
+        onKeyRevoked={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+  });
+
+  it("renders an explicit unavailable state for a malformed createdAt instead of 'Invalid Date'", () => {
+    render(
+      <ApiKeyList
+        apiKeys={[{ ...mockApiKey, createdAt: "not-a-real-timestamp" }]}
+        loading={false}
+        token={mockToken}
+        walletAddress={mockWalletAddress}
+        paginationState={defaultPaginationState}
+        onPreviousPage={jest.fn()}
+        onNextPage={jest.fn()}
+        focusResults={false}
+        onKeyUpdated={jest.fn()}
+        onKeyRevoked={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument();
+  });
+});

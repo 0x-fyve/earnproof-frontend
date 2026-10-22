@@ -1,5 +1,32 @@
+import { z } from "zod";
 import { apiClient, bearer, retryRead, retryMutation } from "./client";
 import type { ApiKey } from "./generated/v1";
+
+/**
+ * Runtime schema for ApiKey (#327). Mirrors the generated `ApiKey`
+ * interface's shape, but a generated TS type only constrains the compiler -
+ * this is checked against the actual response at runtime by `apiClient`'s
+ * `responseSchema` option. `.passthrough()` so a server adding a new,
+ * additive field doesn't fail validation; only the fields below are
+ * actually checked.
+ */
+const apiKeySchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    prefix: z.string(),
+    scopes: z.array(z.string()),
+    expiresAt: z.string().nullable().optional(),
+    createdAt: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+const createApiKeyResponseSchema = z
+  .object({
+    apiKey: apiKeySchema,
+    secret: z.string(),
+  })
+  .passthrough();
 
 export type CreateApiKeyRequest = {
   name: string;
@@ -61,6 +88,7 @@ export async function getApiKeys(token: string, signal: AbortSignal): Promise<Ap
       path: "/api-keys",
       method: "GET",
       headers: bearer(token),
+      responseSchema: z.array(apiKeySchema),
       signal,
     });
   }, signal);
@@ -99,6 +127,7 @@ export async function createApiKey(
       method: "POST",
       headers: bearer(token),
       body: JSON.stringify(request),
+      responseSchema: createApiKeyResponseSchema,
       signal,
     });
   }, signal);
@@ -225,11 +254,70 @@ export function validateApiKeyScopes(scopes: string[]): string | null {
   if (scopes.length === 0) {
     return "At least one scope is required";
   }
-  
+
   const invalidScopes = scopes.filter((scope) => !isApiKeyScope(scope));
   if (invalidScopes.length > 0) {
     return `Invalid scopes: ${invalidScopes.join(", ")}`;
   }
-  
+
   return null;
+}
+
+export type ApiKeySortOrder = "created-desc" | "created-asc" | "name-asc" | "name-desc";
+
+/**
+ * Returns true when `createdAt` can be trusted for display or sorting: a
+ * non-empty string that parses to a valid date. Keys created before this
+ * field existed report `createdAt` as `null`/`undefined` from the API, and
+ * a malformed value from a misbehaving backend must fail the same way
+ * rather than rendering "Invalid Date" or silently sorting as epoch 0 (#323).
+ */
+export function hasKnownCreationDate(apiKey: Pick<ApiKey, "createdAt">): boolean {
+  if (!apiKey.createdAt) return false;
+  const parsed = new Date(apiKey.createdAt);
+  return !Number.isNaN(parsed.getTime());
+}
+
+/**
+ * Sorts API keys for display. Keys with an unavailable creation date never
+ * silently collapse to "oldest" or "newest" under a created-at sort: they
+ * are always ordered after every key with a known date (regardless of
+ * asc/desc), and among themselves by name, so the sort order stays
+ * deterministic instead of depending on insertion order.
+ */
+export function sortApiKeys(apiKeys: ApiKey[], order: ApiKeySortOrder): ApiKey[] {
+  const sorted = [...apiKeys];
+
+  if (order === "name-asc" || order === "name-desc") {
+    sorted.sort((a, b) => {
+      const cmp = a.name.localeCompare(b.name);
+      return order === "name-asc" ? cmp : -cmp;
+    });
+    return sorted;
+  }
+
+  sorted.sort((a, b) => {
+    const aKnown = hasKnownCreationDate(a);
+    const bKnown = hasKnownCreationDate(b);
+    if (aKnown && !bKnown) return -1;
+    if (!aKnown && bKnown) return 1;
+    if (!aKnown && !bKnown) return a.name.localeCompare(b.name);
+
+    const aTime = new Date(a.createdAt as string).getTime();
+    const bTime = new Date(b.createdAt as string).getTime();
+    return order === "created-desc" ? bTime - aTime : aTime - bTime;
+  });
+
+  return sorted;
+}
+
+/** Filters API keys to those whose creation timestamp is known/unknown, for an explicit "unavailable" filter in the UI. */
+export function filterApiKeysByCreationAvailability(
+  apiKeys: ApiKey[],
+  availability: "all" | "known" | "unavailable",
+): ApiKey[] {
+  if (availability === "all") return apiKeys;
+  return apiKeys.filter((key) =>
+    availability === "known" ? hasKnownCreationDate(key) : !hasKnownCreationDate(key),
+  );
 }

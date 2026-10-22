@@ -85,6 +85,7 @@ export function AuthSessionProvider({
   const tokenManager = TokenManager.getInstance();
   const coordinator = SessionCoordinator.getInstance();
   const walletDetector = WalletDetector.getInstance();
+  const queryClient = useQueryClient();
   const multiTabSync = MultiTabSync.getInstance();
 
   // Initialize wallet detection and multi-tab sync
@@ -176,6 +177,14 @@ export function AuthSessionProvider({
 
   const clearSession = useCallback(
     (reason?: string) => {
+      // Purge every cached query scoped to the outgoing wallet (#326)
+      // before dropping the token/session state below - a wallet switch or
+      // disconnect must never leave the previous wallet's cached API
+      // keys/proofs/organizations visible to whatever connects next.
+      if (user?.walletAddress) {
+        purgeWalletQueries(queryClient, user.walletAddress);
+      }
+
       setUser(null);
       tokenManager.clearToken();
       coordinator.reset();
@@ -187,7 +196,7 @@ export function AuthSessionProvider({
         console.debug(`Session cleared: ${reason}`);
       }
     },
-    [tokenManager, coordinator, onSessionChange],
+    [tokenManager, coordinator, onSessionChange, queryClient, user],
   );
 
   const attemptRecovery = useCallback(

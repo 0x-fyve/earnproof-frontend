@@ -747,7 +747,13 @@
           "name": { "type": "string", "example": "Reporting integration" },
           "prefix": { "type": "string", "example": "epk_test" },
           "scopes": { "type": "array", "items": { "type": "string" }, "example": ["proofs:read"] },
-          "expiresAt": { "type": "string", "nullable": true }
+          "expiresAt": { "type": "string", "nullable": true },
+          "createdAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO 8601 creation timestamp. Absent/null for keys created before this field existed; the UI must render an explicit unavailable state rather than guessing.",
+            "example": "2026-01-15T09:30:00.000Z"
+          }
         }
       },
       "CreateWebhookRequest": {
