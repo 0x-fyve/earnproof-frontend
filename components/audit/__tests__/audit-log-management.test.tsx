@@ -6,6 +6,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AuditLogManagement } from "../audit-log-management";
 import { getAuditLog, verifyAuditChain } from "@/lib/api/audit";
+import { storeSession, clearStoredSession } from "@/lib/session";
 
 const mockReplace = jest.fn();
 let mockSearchParams = new URLSearchParams();
@@ -28,7 +29,6 @@ jest.mock("@/lib/api/audit", () => {
 const mockedGetAuditLog = getAuditLog as jest.MockedFunction<typeof getAuditLog>;
 const mockedVerifyChain = verifyAuditChain as jest.MockedFunction<typeof verifyAuditChain>;
 
-const SESSION_KEY = "earnproof.session";
 
 const ADMIN_SESSION = {
   token: "test-token",
@@ -55,7 +55,7 @@ const ENTRY_2 = { ...ENTRY_1, id: "entry-2", resource: "proof-2", entryHash: "ha
 
 describe("AuditLogManagement authorization", () => {
   afterEach(() => {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession();
   });
 
   it("prompts to connect a wallet when there is no session", () => {
@@ -64,7 +64,7 @@ describe("AuditLogManagement authorization", () => {
   });
 
   it("shows an access-restricted message for a non-admin session", () => {
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(WORKER_SESSION));
+    storeSession(WORKER_SESSION);
     render(<AuditLogManagement />);
     expect(screen.getByText("Access Restricted")).toBeInTheDocument();
   });
@@ -76,11 +76,11 @@ describe("AuditLogManagement for an admin session", () => {
     mockSearchParams = new URLSearchParams();
     mockedGetAuditLog.mockReset();
     mockedVerifyChain.mockReset();
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(ADMIN_SESSION));
+    storeSession(ADMIN_SESSION);
   });
 
   afterEach(() => {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession();
   });
 
   it("loads the first page of entries and the chain status on mount", async () => {

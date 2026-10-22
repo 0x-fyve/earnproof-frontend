@@ -10,6 +10,11 @@ const navigationItems = [
     description: "Manage organizations and their status",
   },
   {
+    name: "Onboarding",
+    href: "/settings/organizations/onboarding",
+    description: "Review required and optional onboarding steps for this organization",
+  },
+  {
     name: "Issuers",
     href: "/settings/issuers",
     description: "Manage issuers and their organizational relationships",
@@ -35,6 +40,14 @@ const navigationItems = [
     description: "View and revoke active sessions on other devices",
   },
   {
+    name: "Security Notifications",
+    href: "/settings/notifications",
+    description: "Inspect tenant-scoped security notices and incident acknowledgements",
+    name: "Schema Import",
+    href: "/settings/schemas",
+    description: "Validate schema metadata and policy mappings before importing them into your organization",
+  },
+  {
     name: "Audit Log",
     href: "/settings/audit",
     description: "Filter, verify, and export organization audit records",
@@ -43,6 +56,11 @@ const navigationItems = [
     name: "Usage & Quotas",
     href: "/settings/usage",
     description: "Track quota usage and request rate limits",
+  },
+  {
+    name: "Job Executions",
+    href: "/settings/jobs",
+    description: "Monitor recent background job executions and their outcomes",
   },
 ];
 

@@ -2,12 +2,15 @@
 
 import { useCallback, useState } from "react";
 import { formatApiKeyPrefix, rotateApiKey, revokeApiKey } from "@/lib/api/keys";
+import { getExpirationStatus, isApiKeyValid } from "@/lib/api/api-key-expiration";
 import { Redacted } from "@/components/common/redacted";
 import { ConfirmationDialog } from "@/components/common/confirmation-dialog";
 import { CursorPagination, type PaginationState } from "@/components/common/cursor-pagination";
 import { ResultsHeading } from "@/components/common/results-heading";
 import { RecentAuthGate } from "@/components/common/recent-auth-gate";
 import { OneTimeSecret } from "./one-time-secret";
+import { KeyOverlapRotationDialog } from "./key-overlap-rotation";
+import { KeyActivityDetailView } from "./key-activity-detail";
 import { formatDate, formatMessage, formatRelativeTime } from "@/lib/i18n";
 import { useRecentAuth } from "@/lib/auth/recent-auth";
 import { signWithFreighter } from "@/lib/wallet/sign-message";
@@ -58,6 +61,7 @@ export function ApiKeyList({
     secret: string;
   } | null>(null);
   const [pendingRevokeName, setPendingRevokeName] = useState<string | null>(null);
+  const [overlapDialogKey, setOverlapDialogKey] = useState<ApiKey | null>(null);
   const recentAuth = useRecentAuth({
     walletAddress,
     signMessage: (message) => signWithFreighter(message, walletAddress),
@@ -142,6 +146,16 @@ export function ApiKeyList({
         />
       )}
 
+      {overlapDialogKey && (
+        <KeyOverlapRotationDialog
+          apiKey={overlapDialogKey}
+          token={token}
+          recentAuth={recentAuth}
+          onClose={() => setOverlapDialogKey(null)}
+          onOverlapStarted={() => setOverlapDialogKey(null)}
+        />
+      )}
+
       <div className="grid gap-3">
         {error && (
           <div className="rounded-md border border-rose-300/30 bg-rose-300/10 p-3">
@@ -187,6 +201,7 @@ export function ApiKeyList({
                 keyName: key.name,
               })
             }
+            onOverlapRotate={() => setOverlapDialogKey(key)}
           />
         ))}
       </div>
@@ -282,13 +297,17 @@ function ApiKeyRow({
   isLoading,
   onRotate,
   onRevoke,
+  onOverlapRotate,
 }: {
   apiKey: ApiKey;
   isLoading: boolean;
   onRotate: () => void;
   onRevoke: () => void;
+  /** Optional: when provided, shows a "Start overlap rotation" action (#239) alongside the instant Rotate button. */
+  onOverlapRotate?: () => void;
 }) {
   const expirationStatus = getExpirationStatus(apiKey.expiresAt);
+  const [activityExpanded, setActivityExpanded] = useState(false);
 
   const formatOptionalDate = (dateString: string | null | undefined) => {
     if (!dateString) return "Never";
@@ -359,8 +378,9 @@ function ApiKeyRow({
 
   return (
     <div
-      className={`grid gap-3 rounded-md border p-4 text-sm md:grid-cols-[1.5fr_1fr_1fr_1fr_auto] md:items-center md:gap-4 transition ${getExpirationBgColor()} ${getExpirationBorderColor()}`}
+      className={`grid gap-3 rounded-md border p-4 text-sm transition ${getExpirationBgColor()} ${getExpirationBorderColor()}`}
     >
+    <div className="grid gap-3 md:grid-cols-[1.5fr_1fr_1fr_1fr_auto] md:items-center md:gap-4">
       {/* Name & Prefix */}
       <div className="min-w-0">
         <div className="font-medium text-white">{apiKey.name}</div>
@@ -413,6 +433,14 @@ function ApiKeyRow({
       {/* Actions */}
       <div className="flex flex-wrap gap-2">
         <button
+          onClick={() => setActivityExpanded((expanded) => !expanded)}
+          className="h-8 rounded border border-white/15 px-3 text-xs font-medium text-white hover:bg-white/5 transition"
+          aria-expanded={activityExpanded}
+          aria-label={`${activityExpanded ? "Hide" : "Show"} activity for API key ${apiKey.name}`}
+        >
+          {activityExpanded ? "Hide activity" : "Activity"}
+        </button>
+        <button
           onClick={onRotate}
           disabled={isLoading}
           className="h-8 rounded border border-white/15 px-3 text-xs font-medium text-white hover:bg-white/5 disabled:opacity-50 transition"
@@ -420,6 +448,16 @@ function ApiKeyRow({
         >
           {isLoading ? "..." : "Rotate"}
         </button>
+        {onOverlapRotate && (
+          <button
+            onClick={onOverlapRotate}
+            disabled={isLoading}
+            className="h-8 rounded border border-cyan-300/30 px-3 text-xs font-medium text-cyan-200 hover:bg-cyan-300/10 disabled:opacity-50 transition"
+            aria-label={`Start overlap rotation for API key ${apiKey.name}`}
+          >
+            Overlap rotation
+          </button>
+        )}
         <button
           onClick={onRevoke}
           disabled={isLoading}
@@ -429,6 +467,9 @@ function ApiKeyRow({
           {isLoading ? "..." : "Revoke"}
         </button>
       </div>
+    </div>
+
+      {activityExpanded ? <KeyActivityDetailView keyId={apiKey.id} /> : null}
     </div>
   );
 }

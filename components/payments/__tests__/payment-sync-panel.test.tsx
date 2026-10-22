@@ -6,6 +6,7 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PaymentSyncPanel } from "../payment-sync-panel";
 import { syncPayments } from "@/lib/api/payments";
+import { storeSession } from "@/lib/session";
 
 jest.mock("@/lib/api/payments", () => ({
   ...jest.requireActual("@/lib/api/payments"),
@@ -14,13 +15,9 @@ jest.mock("@/lib/api/payments", () => ({
 
 const mockedSyncPayments = syncPayments as jest.MockedFunction<typeof syncPayments>;
 
-const SESSION_KEY = "earnproof.session";
 
 function setSession(role = "ADMIN") {
-  window.localStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify({ token: "token-123", user: { id: "u1", role } }),
-  );
+  storeSession({ token: "token-123", user: { id: "u1", role } });
 }
 
 describe("PaymentSyncPanel", () => {

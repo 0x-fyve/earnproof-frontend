@@ -5,6 +5,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CreateProofFlow } from "@/components/proofs/create-proof-flow";
 import { apiClient } from "@/lib/api/client";
+import { storeSession } from "@/lib/session";
 
 jest.mock("@/lib/api/client", () => ({
   apiClient: jest.fn(),
@@ -13,7 +14,6 @@ jest.mock("@/lib/api/client", () => ({
 
 const mockedApiClient = apiClient as jest.Mock;
 
-const SESSION_KEY = "earnproof.session";
 
 const SESSION = {
   token: "test-token",
@@ -61,7 +61,7 @@ const PROOF_RESPONSE = {
 };
 
 function seedSession() {
-  window.localStorage.setItem(SESSION_KEY, JSON.stringify(SESSION));
+  storeSession(SESSION);
 }
 
 function deferred<T>() {
