@@ -6,12 +6,12 @@
  * This script runs all production-readiness validations:
  * 1. Route manifest and metadata validation
  * 2. Internal link validation
- * 3. Storage schema validation (placeholder)
+ * 3. Browser storage schema audit (registered keys, versioned schemas,
+ *    declared accessors, no secrets or retired keys persisted)
  */
 
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
 
 const APP_ROOT = path.join(__dirname, '..');
 
@@ -134,75 +134,21 @@ function validateMockReachability() {
 }
 
 function validateStorageSchemas() {
-  console.log('Validating storage schemas...');
-  
-  // This is a placeholder - actual implementation would:
-  // 1. Scan for localStorage/sessionStorage usage
-  // 2. Validate schemas
-  // 3. Check migration paths
-  
-  // For now, just check that SESSION_KEY is consistently used
-  const storageCheck = spawnSync('node', ['-e', `
-    const fs = require('fs');
-    const path = require('path');
-    
-    const componentsDir = path.join(__dirname, '..', 'components');
-    let hasSessionKey = false;
-    let inconsistentKeys = [];
-    
-    function scanDir(dir) {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          scanDir(fullPath);
-        } else if (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts')) {
-          const content = fs.readFileSync(fullPath, 'utf8');
-          if (content.includes('localStorage') || content.includes('sessionStorage')) {
-            if (content.includes('SESSION_KEY')) {
-              hasSessionKey = true;
-            } else if (content.includes('"earnproof.session"')) {
-              // Direct string usage - should use constant
-              inconsistentKeys.push(path.relative(path.join(__dirname, '..'), fullPath));
-            }
-          }
-        }
-      }
-    }
-    
-    try {
-      scanDir(componentsDir);
-      if (inconsistentKeys.length > 0) {
-        console.log(JSON.stringify({
-          success: false,
-          errors: inconsistentKeys.map(file => \`[INCONSISTENT_STORAGE_KEY] \${file}: Direct string usage instead of SESSION_KEY constant\`),
-          warnings: []
-        }));
-      } else {
-        console.log(JSON.stringify({
-          success: true,
-          errors: [],
-          warnings: hasSessionKey ? [] : ['[NO_STORAGE_FOUND] No browser storage usage found']
-        }));
-      }
-    } catch (error) {
-      console.log(JSON.stringify({
-        success: false,
-        errors: [\`Storage scan failed: \${error.message}\`],
-        warnings: []
-      }));
-    }
-  `], { cwd: __dirname, encoding: 'utf8' });
-  
-  try {
-    return JSON.parse(storageCheck.stdout);
-  } catch (error) {
-    return {
-      success: false,
-      errors: [`Failed to parse storage validation output: ${error.message}`],
-      warnings: []
-    };
-  }
+  const { auditStorage } = require('./storage-schema-audit');
+
+  console.log('Auditing browser storage against lib/storage/registry.json...');
+  const result = auditStorage({ root: APP_ROOT });
+
+  console.log(
+    `Scanned ${result.stats.filesScanned} files; ${result.stats.accessFiles} touch browser storage; ` +
+    `${result.stats.entries} registered keys.`
+  );
+
+  return {
+    success: result.success,
+    errors: result.errors,
+    warnings: result.warnings,
+  };
 }
 
 function main() {

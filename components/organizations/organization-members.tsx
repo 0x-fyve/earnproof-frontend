@@ -18,9 +18,18 @@ import {
   type InviteOrganizationMemberInput,
 } from "@/lib/validation/organization-members";
 import { ConfirmationDialog } from "@/components/common/confirmation-dialog";
+import { BulkActionToolbar } from "@/components/common/bulk-action-toolbar";
+import { BulkActionReviewDialog, type BulkReviewItem } from "@/components/common/bulk-action-review-dialog";
+import { BulkActionProgress } from "@/components/common/bulk-action-progress";
+import { BulkActionResult } from "@/components/common/bulk-action-result";
+import { useBulkSelection } from "@/lib/bulk-actions/use-bulk-selection";
+import { useBulkActionFlow } from "@/lib/bulk-actions/use-bulk-action-flow";
+import {
+  BulkActionAuthorizationError,
+  BulkActionStaleItemError,
+} from "@/lib/bulk-actions/execute-bulk-action";
 import { formatMessage } from "@/lib/i18n";
-
-const SESSION_KEY = "earnproof.session";
+import { readStoredSession, clearStoredSession } from "@/lib/session";
 
 type SessionData = {
   token: string;
@@ -30,24 +39,6 @@ type SessionData = {
     role: string;
   };
 };
-
-function readStoredSession(): SessionData | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const stored = window.localStorage.getItem(SESSION_KEY);
-  if (!stored) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(stored) as SessionData;
-  } catch {
-    window.localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-}
 
 /**
  * Member listing, invitation, role change, and removal for a single
@@ -200,9 +191,72 @@ export function OrganizationMembers({
   );
 
   const handleSignOutStaleSession = useCallback(() => {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession("unauthorized");
     window.location.reload();
   }, []);
+
+  // Bulk removal (#251). Scoped strictly to the members currently rendered
+  // in `members` (this component has no filter/pagination of its own, so
+  // "visible" == the full loaded member list) — see
+  // lib/bulk-actions/selection-store.ts for the scoping contract that
+  // `useBulkSelection` enforces: "select all" only ever means "select all
+  // currently visible members," and any member removed/changed server-side
+  // between selection and execution is reconciled out automatically.
+  const visibleMemberIds = members.map((m) => m.id);
+  const bulkSelection = useBulkSelection(visibleMemberIds);
+
+  const performBulkRemove = useCallback(
+    async (memberId: string) => {
+      const member = members.find((m) => m.id === memberId);
+      if (!member) {
+        // The member disappeared from this client's view between review and
+        // execution (e.g. removed by someone else) — the stale-row case.
+        throw new BulkActionStaleItemError();
+      }
+      const capabilities = deriveMemberCapabilities(member, members, viewerRole);
+      if (!capabilities.canRemove) {
+        throw new BulkActionAuthorizationError(
+          "The last owner cannot be removed, or you lack permission to remove this member."
+        );
+      }
+      const controller = new AbortController();
+      await removeOrganizationMember(token, organizationId, memberId, controller.signal);
+      setMembers((prev) => prev.filter((m) => m.id !== memberId));
+      if (member.walletAddress === viewerWalletAddress) {
+        setSessionStale(true);
+      }
+    },
+    [members, viewerRole, token, organizationId, viewerWalletAddress]
+  );
+
+  const bulkRemoveFlow = useBulkActionFlow({
+    tenantId: organizationId,
+    actionName: "remove-members",
+    performAction: performBulkRemove,
+  });
+
+  const bulkReviewItems: BulkReviewItem[] = bulkSelection.selectedIds.map((id) => {
+    const member = members.find((m) => m.id === id);
+    const label = member ? member.walletAddress : `Member ${id}`;
+    if (!member) {
+      return { id, label, excludedReason: "This member no longer exists in the current list." };
+    }
+    const capabilities = deriveMemberCapabilities(member, members, viewerRole);
+    if (!capabilities.canRemove) {
+      return {
+        id,
+        label,
+        excludedReason: "The last owner, or a role you cannot modify.",
+      };
+    }
+    return { id, label };
+  });
+  const bulkReviewIncludedIds = bulkReviewItems.filter((item) => !item.excludedReason).map((item) => item.id);
+
+  const getMemberLabel = useCallback(
+    (memberId: string) => members.find((m) => m.id === memberId)?.walletAddress ?? memberId,
+    [members]
+  );
 
   return (
     <section
@@ -304,15 +358,33 @@ export function OrganizationMembers({
       ) : !hasLoaded && loadError ? null : members.length === 0 ? (
         <p className="text-sm text-slate-400">No members yet. Invite someone above.</p>
       ) : (
-        <ul className="grid gap-2">
+        <>
+          <BulkActionToolbar
+            actionLabel="Remove selected"
+            disabled={bulkRemoveFlow.phase !== "idle"}
+            isAllVisibleSelected={bulkSelection.isAllVisibleSelected}
+            isSomeVisibleSelected={bulkSelection.isSomeVisibleSelected}
+            onClear={bulkSelection.clear}
+            onReview={bulkRemoveFlow.startReview}
+            onSelectAllVisible={bulkSelection.selectAllVisible}
+            selectedCount={bulkSelection.count}
+            visibleCount={visibleMemberIds.length}
+          />
+          <ul className="grid gap-2">
           {members.map((member) => {
             const capabilities = deriveMemberCapabilities(member, members, viewerRole);
             const isSelf = member.walletAddress === viewerWalletAddress;
             return (
               <li
-                className="grid gap-2 rounded-md border border-white/10 bg-white/[0.03] p-3 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-center"
+                className="grid gap-2 rounded-md border border-white/10 bg-white/[0.03] p-3 sm:grid-cols-[auto_2fr_1fr_1fr_auto] sm:items-center"
                 key={member.id}
               >
+                <input
+                  aria-label={formatMessage("Select {walletAddress}", { walletAddress: member.walletAddress })}
+                  checked={bulkSelection.isSelected(member.id)}
+                  onChange={() => bulkSelection.toggle(member.id)}
+                  type="checkbox"
+                />
                 <div className="min-w-0">
                   <p className="truncate font-mono text-xs text-slate-300">{member.walletAddress}</p>
                   {isSelf && <p className="text-[11px] text-cyan-200">You</p>}
@@ -358,7 +430,41 @@ export function OrganizationMembers({
               </li>
             );
           })}
-        </ul>
+          </ul>
+        </>
+      )}
+
+      {bulkRemoveFlow.phase === "reviewing" && (
+        <BulkActionReviewDialog
+          confirmText="Remove members"
+          consequence={`This will permanently remove ${bulkReviewIncludedIds.length} member${
+            bulkReviewIncludedIds.length === 1 ? "" : "s"
+          } from ${organizationName}. They will immediately lose access to this organization.`}
+          items={bulkReviewItems}
+          onCancel={bulkRemoveFlow.cancelReview}
+          onConfirm={() => bulkRemoveFlow.confirmAndExecute(bulkReviewIncludedIds)}
+          title="Review bulk member removal"
+        />
+      )}
+
+      {bulkRemoveFlow.phase === "executing" && (
+        <BulkActionProgress
+          completed={bulkRemoveFlow.progress.completed}
+          onCancel={bulkRemoveFlow.cancelExecution}
+          total={bulkRemoveFlow.progress.total}
+        />
+      )}
+
+      {bulkRemoveFlow.phase === "result" && bulkRemoveFlow.result && (
+        <BulkActionResult
+          getItemLabel={getMemberLabel}
+          onDismiss={() => {
+            bulkRemoveFlow.dismissResult();
+            bulkSelection.clear();
+          }}
+          onRetryFailed={(retryIds) => bulkRemoveFlow.confirmAndExecute(retryIds)}
+          result={bulkRemoveFlow.result}
+        />
       )}
 
       {confirmRemove && (

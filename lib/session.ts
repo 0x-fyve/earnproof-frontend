@@ -1,7 +1,26 @@
 /**
- * Session management utilities for the EarnProof application.
- * Sessions are stored in localStorage under the key "earnproof.session".
+ * Session management for the EarnProof application.
+ *
+ * The bearer token lives in memory only (via the TokenManager). It is never
+ * written to localStorage, sessionStorage, cookies or the URL. The signed-in
+ * user profile is held in memory next to it and dies with the document.
+ *
+ * Refresh behaviour: a page reload drops the in-memory session, so the next
+ * protected view shows its normal "connect wallet" state and the user signs a
+ * fresh challenge. Nothing is replayed from disk.
+ *
+ * Legacy behaviour: older builds persisted `{ token, user }` under
+ * `earnproof.session`. That entry is treated as invalid. It is never read as a
+ * session and is deleted from localStorage and sessionStorage the first time
+ * this module is used, and again on every store and clear.
+ *
+ * Cross-tab: logout, expiry and wallet changes are broadcast (without any token
+ * material) so every other open tab clears its own in-memory session too.
  */
+
+import { getTabSyncCoordinator } from "@/lib/auth/tab-sync-coordinator";
+import { MultiTabSync, type SyncMessage } from "@/lib/auth/multi-tab-sync";
+import { TokenManager } from "@/lib/auth/token-manager";
 
 export type SessionUser = {
   id: string;
@@ -15,53 +34,178 @@ export type Session = {
   user: SessionUser;
 };
 
-const SESSION_KEY = "earnproof.session";
+/** Legacy persistence key. Only ever used to delete old entries. */
+export const LEGACY_SESSION_KEY = "earnproof.session";
 
-/**
- * Read the stored session from localStorage.
- * Returns null if no session exists or if the stored data is invalid.
- * 
- * @returns Session object or null if not found/invalid
- */
-export function readStoredSession(): Session | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
+export type ClearReason =
+  | "logout"
+  | "expired"
+  | "wallet_changed"
+  | "unauthorized"
+  | "synced_from_other_tab";
 
-  const stored = window.localStorage.getItem(SESSION_KEY);
-  if (!stored) {
-    return null;
-  }
+let currentUser: Session["user"] | null = null;
+let initialized = false;
+let unsubscribeSync: (() => void) | null = null;
+const listeners = new Set<() => void>();
 
-  try {
-    return JSON.parse(stored) as Session;
-  } catch {
-    // Clear invalid session
-    window.localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
+function notify(): void {
+  listeners.forEach((listener) => {
+    try {
+      listener();
+    } catch {
+      // A broken subscriber must not block the others.
+    }
+  });
 }
 
 /**
- * Store a session in localStorage.
- * 
- * @param session Session to store
+ * Delete every legacy persisted session entry.
+ * Returns true when something was removed. Storage errors (private mode,
+ * blocked storage) are swallowed because there is nothing left to leak then.
  */
-export function storeSession(session: Session): void {
+export function purgeLegacySession(): boolean {
   if (typeof window === "undefined") {
+    return false;
+  }
+
+  let removed = false;
+  for (const getStore of [
+    () => window.localStorage,
+    () => window.sessionStorage,
+  ]) {
+    try {
+      const store = getStore();
+      if (store.getItem(LEGACY_SESSION_KEY) !== null) {
+        removed = true;
+      }
+      store.removeItem(LEGACY_SESSION_KEY);
+    } catch {
+      // Storage unavailable: nothing persisted, nothing to purge.
+    }
+  }
+  return removed;
+}
+
+function handleSync(message: SyncMessage): void {
+  if (
+    message.type === "logout" ||
+    message.type === "session_expired" ||
+    message.type === "wallet_changed"
+  ) {
+    clearLocal();
+  }
+}
+
+function clearLocal(): void {
+  const hadSession = currentUser !== null || TokenManager.getInstance().hasToken();
+  currentUser = null;
+  TokenManager.getInstance().clearToken();
+  purgeLegacySession();
+  if (hadSession) {
+    notify();
+  }
+}
+
+function ensureInitialized(): void {
+  if (initialized || typeof window === "undefined") {
     return;
   }
-
-  window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  initialized = true;
+  purgeLegacySession();
+  unsubscribeSync = MultiTabSync.getInstance().onSync(handleSync);
 }
 
 /**
- * Clear the stored session from localStorage.
+ * Read the in-memory session.
+ * Returns null when nobody is signed in, the token expired, or the page was
+ * reloaded since sign-in.
  */
-export function clearStoredSession(): void {
+export function readStoredSession(): Session | null {
+  ensureInitialized();
+
+  const token = TokenManager.getInstance().getToken();
+  if (!token || !currentUser) {
+    if (currentUser && !token) {
+      // Token expired inside the manager: drop the profile with it.
+      currentUser = null;
+      notify();
+    }
+    return null;
+  }
+
+  return { token, user: currentUser };
+}
+
+/**
+ * Clear the stored session from localStorage and tell other open tabs the
+ * wallet logged out (#274), so they drop their in-memory auth and
+ * tenant-scoped state too.
+ *
+ * Pass `{ broadcast: false }` when clearing in response to a message that
+ * came from another tab, so tabs never echo a logout back and forth.
+ */
+export function clearStoredSession({ broadcast = true }: { broadcast?: boolean } = {}): void {
   if (typeof window === "undefined") {
     return;
   }
 
   window.localStorage.removeItem(SESSION_KEY);
+  if (broadcast) {
+    getTabSyncCoordinator()?.publish("wallet_logout");
+  }
+}
+
+/**
+ * Keep a session in memory.
+ *
+ * @param session Session to keep
+ * @param expiresAt Optional expiry (ms since epoch) enforced by the token manager
+ */
+export function storeSession(session: Session, expiresAt?: number): void {
+  ensureInitialized();
+  purgeLegacySession();
+
+  currentUser = session.user;
+  TokenManager.getInstance().setToken(session.token, expiresAt);
+  notify();
+}
+
+/**
+ * Clear the session in this tab and tell every other tab to do the same.
+ */
+export function clearStoredSession(reason: ClearReason = "logout"): void {
+  ensureInitialized();
+  clearLocal();
+  if (reason === "synced_from_other_tab") {
+    return;
+  }
+
+  const sync = MultiTabSync.getInstance();
+  sync.broadcast(
+    reason === "expired" || reason === "unauthorized"
+      ? "session_expired"
+      : reason === "wallet_changed"
+        ? "wallet_changed"
+        : "logout",
+  );
+}
+
+/** Subscribe to session changes (compatible with useSyncExternalStore). */
+export function subscribeSession(listener: () => void): () => void {
+  ensureInitialized();
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** Test helper: forget everything and detach cross-tab listeners. */
+export function resetSessionForTests(): void {
+  currentUser = null;
+  initialized = false;
+  unsubscribeSync?.();
+  unsubscribeSync = null;
+  listeners.clear();
+  TokenManager.reset();
 }

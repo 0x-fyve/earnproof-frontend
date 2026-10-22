@@ -5,6 +5,7 @@
 
 import { render, RenderOptions } from '@testing-library/react';
 import type { ReactElement } from 'react';
+import { clearStoredSession, storeSession, type Session } from '@/lib/session';
 import {
   MOCK_ADMIN_SESSION,
   MOCK_DEVELOPER_SESSION,
@@ -17,17 +18,17 @@ import {
  */
 function setStoredSession(session: typeof MOCK_ADMIN_SESSION | null) {
   if (session) {
-    window.localStorage.setItem('earnproof.session', JSON.stringify(session));
+    storeSession(session as unknown as Session);
   } else {
-    window.localStorage.removeItem('earnproof.session');
+    clearStoredSession();
   }
 }
 
 /**
  * Clean up localStorage session
  */
-function clearStoredSession() {
-  window.localStorage.removeItem('earnproof.session');
+function clearTestSession() {
+  clearStoredSession();
 }
 
 /**
@@ -44,7 +45,7 @@ export function renderAsAdmin(
   // Cleanup on unmount
   const cleanup = result.unmount;
   result.unmount = () => {
-    clearStoredSession();
+    clearTestSession();
     cleanup();
   };
 
@@ -64,7 +65,7 @@ export function renderAsDeveloper(
 
   const cleanup = result.unmount;
   result.unmount = () => {
-    clearStoredSession();
+    clearTestSession();
     cleanup();
   };
 
@@ -84,7 +85,7 @@ export function renderAsIssuer(
 
   const cleanup = result.unmount;
   result.unmount = () => {
-    clearStoredSession();
+    clearTestSession();
     cleanup();
   };
 
@@ -104,7 +105,7 @@ export function renderAsReadOnly(
 
   const cleanup = result.unmount;
   result.unmount = () => {
-    clearStoredSession();
+    clearTestSession();
     cleanup();
   };
 
@@ -119,12 +120,12 @@ export function renderUnauthenticated(
   ui: ReactElement,
   options?: Omit<RenderOptions, 'wrapper'>
 ) {
-  clearStoredSession();
+  clearTestSession();
   const result = render(ui, options);
 
   const cleanup = result.unmount;
   result.unmount = () => {
-    clearStoredSession();
+    clearTestSession();
     cleanup();
   };
 
@@ -137,10 +138,10 @@ export function renderUnauthenticated(
  */
 export function setupAuthHelpers() {
   beforeEach(() => {
-    clearStoredSession();
+    clearTestSession();
   });
 
   afterEach(() => {
-    clearStoredSession();
+    clearTestSession();
   });
 }

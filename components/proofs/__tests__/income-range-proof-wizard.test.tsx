@@ -6,6 +6,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { IncomeRangeProofWizard } from "../income-range-proof-wizard";
 import { apiClient } from "@/lib/api/client";
+import { storeSession, clearStoredSession } from "@/lib/session";
 
 jest.mock("@/lib/api/client", () => ({
   apiClient: jest.fn(),
@@ -15,7 +16,6 @@ jest.mock("@/lib/api/client", () => ({
 
 const mockedApiClient = apiClient as jest.MockedFunction<typeof apiClient>;
 
-const SESSION_KEY = "earnproof.session";
 
 const SESSION = {
   token: "test-token",
@@ -58,15 +58,15 @@ describe("IncomeRangeProofWizard", () => {
       }
       return Promise.resolve(undefined);
     });
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(SESSION));
+    storeSession(SESSION);
   });
 
   afterEach(() => {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession();
   });
 
   it("verifies deployment metadata before requesting a wallet signature, and blocks connecting when it's unavailable (#185)", async () => {
-    window.localStorage.removeItem(SESSION_KEY); // start unauthenticated, so the Connect Freighter button renders
+    clearStoredSession(); // start unauthenticated, so the Connect Freighter button renders
     mockedApiClient.mockReset();
     mockedApiClient.mockImplementation((options) => {
       if (options.path === "/deployment/metadata") {

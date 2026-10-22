@@ -2,6 +2,7 @@ import { PageHeading } from "@/components/common/page-heading";
 import { pageContainer } from "@/components/common/production-ui";
 import { SecurityDashboard } from "@/components/security/security-dashboard";
 import { PublicShell } from "@/components/layout/public-shell";
+import Link from "next/link";
 import { Suspense } from "react";
 
 export default function SecurityPage() {
@@ -13,6 +14,9 @@ export default function SecurityPage() {
           eyebrow="Security"
           title="Organization Security Posture"
         />
+        <Link className="w-fit text-sm text-cyan-200 underline" href="/settings/security/csp">
+          CSP violation diagnostics
+        </Link>
         <Suspense
           fallback={
             <div className="space-y-6">

@@ -5,8 +5,9 @@ import { CreateWebhookForm } from "./create-webhook-form";
 import { WebhookList } from "./webhook-list";
 import { WebhookSecretDisplay } from "./webhook-secret-display";
 import { getWebhooks, type CreateWebhookResponse, type Webhook, rotateWebhook } from "@/lib/api/webhooks";
-
-const SESSION_KEY = "earnproof.session";
+import { readStoredSession } from "@/lib/session";
+import { useAnnounce } from "@/lib/a11y/announcer-context";
+import { WebhookReplayDebugger } from "@/components/developers/webhook-replay-debugger";
 
 type SessionData = {
   token: string;
@@ -16,24 +17,6 @@ type SessionData = {
   };
 };
 
-function readStoredSession(): SessionData | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const stored = window.localStorage.getItem(SESSION_KEY);
-  if (!stored) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(stored) as SessionData;
-  } catch {
-    window.localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-}
-
 export function WebhookManagement() {
   const [session] = useState<SessionData | null>(() => readStoredSession());
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
@@ -42,8 +25,14 @@ export function WebhookManagement() {
   const [createdWebhook, setCreatedWebhook] = useState<CreateWebhookResponse | null>(null);
   const [rotatedWebhookId, setRotatedWebhookId] = useState<string | null>(null);
   const [rotatedSecret, setRotatedSecret] = useState<string | null>(null);
+  // Secrets are only ever returned once, on create/rotate, and are never
+  // persisted or re-fetched. The replay debugger (#250) can therefore only
+  // sign synthetic deliveries for webhooks whose secret was captured this
+  // session — it never stores or displays the secret itself.
+  const [knownSecretsByWebhookId, setKnownSecretsByWebhookId] = useState<Record<string, string>>({});
   const abortControllerRef = useRef<AbortController | null>(null);
   const sessionToken = session?.token ?? null;
+  const { announce } = useAnnounce();
 
   const loadWebhooks = useCallback(async () => {
     if (!sessionToken) {
@@ -68,14 +57,16 @@ export function WebhookManagement() {
       }
     } catch {
       if (!controller.signal.aborted) {
-        setError("Failed to load webhooks. Please try again.");
+        const message = "Failed to load webhooks. Please try again.";
+        setError(message);
+        announce(message, { politeness: "assertive", source: "webhooks" });
       }
     } finally {
       if (!controller.signal.aborted) {
         setLoading(false);
       }
     }
-  }, [sessionToken]);
+  }, [announce, sessionToken]);
 
   useEffect(() => {
     let active = true;
@@ -95,22 +86,37 @@ export function WebhookManagement() {
     };
   }, [loadWebhooks]);
 
-  const handleWebhookCreated = useCallback((response: CreateWebhookResponse) => {
-    setCreatedWebhook(response);
-    setWebhooks((prev) => [...prev, response.webhook]);
-  }, []);
+  const handleWebhookCreated = useCallback(
+    (response: CreateWebhookResponse) => {
+      setCreatedWebhook(response);
+      setWebhooks((prev) => [...prev, response.webhook]);
+      setKnownSecretsByWebhookId((prev) => ({ ...prev, [response.webhook.id]: response.secret }));
+      // Never announce the secret or endpoint URL itself — only that the
+      // operation happened (#252's "no secrets in announcements" criterion).
+      announce("Webhook created.", { source: "webhooks" });
+    },
+    [announce],
+  );
 
-  const handleWebhookUpdated = useCallback((updated: Webhook) => {
-    setWebhooks((prev) =>
-      prev.map((webhook) =>
-        webhook.id === updated.id ? updated : webhook
-      )
-    );
-  }, []);
+  const handleWebhookUpdated = useCallback(
+    (updated: Webhook) => {
+      setWebhooks((prev) =>
+        prev.map((webhook) =>
+          webhook.id === updated.id ? updated : webhook
+        )
+      );
+      announce("Webhook updated.", { source: "webhooks" });
+    },
+    [announce],
+  );
 
-  const handleWebhookDeleted = useCallback((webhookId: string) => {
-    setWebhooks((prev) => prev.filter((webhook) => webhook.id !== webhookId));
-  }, []);
+  const handleWebhookDeleted = useCallback(
+    (webhookId: string) => {
+      setWebhooks((prev) => prev.filter((webhook) => webhook.id !== webhookId));
+      announce("Webhook deleted.", { source: "webhooks" });
+    },
+    [announce],
+  );
 
   const handleWebhookRotated = useCallback(
     async (webhookId: string) => {
@@ -119,16 +125,21 @@ export function WebhookManagement() {
         const response = await rotateWebhook(sessionToken!, webhookId, controller.signal);
         setRotatedWebhookId(webhookId);
         setRotatedSecret(response.secret);
+        setKnownSecretsByWebhookId((prev) => ({ ...prev, [webhookId]: response.secret }));
+        // Never announce the rotated secret itself.
+        announce("Webhook secret rotated.", { source: "webhooks" });
         // Auto-hide after showing the secret
         setTimeout(() => {
           setRotatedWebhookId(null);
           setRotatedSecret(null);
         }, 60000); // Auto-dismiss after 1 minute
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to rotate webhook");
+        const message = err instanceof Error ? err.message : "Failed to rotate webhook";
+        setError(message);
+        announce(message, { politeness: "assertive", source: "webhooks" });
       }
     },
-    [sessionToken]
+    [announce, sessionToken]
   );
 
   const handleSecretDismissed = useCallback(() => {
@@ -226,6 +237,14 @@ export function WebhookManagement() {
           onWebhookRotated={handleWebhookRotated}
         />
       </section>
+
+      {Object.keys(knownSecretsByWebhookId).length > 0 && (
+        <WebhookReplayDebugger
+          webhooks={webhooks.filter((webhook) => knownSecretsByWebhookId[webhook.id])}
+          secretsByWebhookId={knownSecretsByWebhookId}
+          userRole={session.user.role}
+        />
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { withConcurrencyLimit, type ClientRequestPriority } from "@/lib/network/
 import { ApiResponseValidationError, validateApiResponse } from "@/lib/validation/runtime-response";
 import { parseDeprecationHeaders } from "./deprecation-warnings";
 import { recordDeprecationWarning } from "./use-deprecation-warning";
+import { resolveRetryDelay } from "@/lib/network/retry-after";
 
 const DEFAULT_TIMEOUT_MS = 10_000; // 10 seconds
 
@@ -262,6 +263,24 @@ export function isRetryable(error: unknown, response?: Response): boolean {
   return !response && error instanceof TypeError;
 }
 
+/**
+ * A retryable failure optionally carrying the `Response` that caused it,
+ * so `retryRead` can read a 429/503's `Retry-After` header before deciding
+ * how long to wait for the next attempt. `fn` throws this (instead of the
+ * raw error) specifically when it wants `retryRead`'s `Retry-After`-aware
+ * delay; any other thrown value is treated as non-retryable, same as
+ * before.
+ */
+export class RetryableApiFailure extends Error {
+  constructor(
+    public readonly cause: unknown,
+    public readonly response?: Response,
+  ) {
+    super(cause instanceof Error ? cause.message : "Retryable API failure");
+    this.name = "RetryableApiFailure";
+  }
+}
+
 export async function retryRead<T>(
   fn: (signal: AbortSignal) => Promise<T>,
   signal: AbortSignal,
@@ -273,20 +292,24 @@ export async function retryRead<T>(
       return await fn(signal);
     } catch (error) {
       const isLast = attempt === maxAttempts - 1;
+      const response =
+        error instanceof RetryableApiFailure ? error.response : undefined;
+      const underlyingError =
+        error instanceof RetryableApiFailure ? error.cause : error;
 
-      if (signal.aborted || !isRetryable(error)) {
-        throw error;
+      if (signal.aborted || !isRetryable(underlyingError, response)) {
+        throw error instanceof RetryableApiFailure ? error.cause : error;
       }
 
       if (isLast) {
-        throw error;
+        throw error instanceof RetryableApiFailure ? error.cause : error;
       }
 
-      const delay =
-        baseDelayMs *
-        Math.pow(2, attempt) *
-        (0.5 + Math.random() * 0.5);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      // A 429/503's `Retry-After` header, when present, always wins over
+      // the exponential-backoff-with-jitter fallback — see
+      // lib/network/retry-after.ts for why.
+      const { waitMs } = resolveRetryDelay(response, attempt, { baseDelayMs });
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
   }
 
@@ -305,7 +328,7 @@ export async function retryMutation<T>(
 
 export class ApiConflictError extends Error {
   readonly statusCode = 409;
-  
+
   constructor(
     public serverEntity?: unknown,
     public userSubmittedData?: Record<string, unknown>,
@@ -379,7 +402,8 @@ async function apiClientImpl<TResponse>({
       const apiConflictError = new ApiConflictError(
         conflictData.currentEntity,
         conflictData.submittedData as Record<string, unknown> | undefined,
-        errorResponse.message || "A stale write conflict occurred. The resource was modified after you loaded this form.",
+        errorResponse.message ||
+          "A stale write conflict occurred. The resource was modified after you loaded this form.",
       );
       reportClientError({
         error: apiConflictError,

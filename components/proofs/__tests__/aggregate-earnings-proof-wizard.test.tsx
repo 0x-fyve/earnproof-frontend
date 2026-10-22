@@ -6,6 +6,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AggregateEarningsProofWizard } from "../aggregate-earnings-proof-wizard";
 import { apiClient } from "@/lib/api/client";
+import { storeSession, clearStoredSession } from "@/lib/session";
 
 jest.mock("@/lib/api/client", () => ({
   apiClient: jest.fn(),
@@ -15,7 +16,6 @@ jest.mock("@/lib/api/client", () => ({
 
 const mockedApiClient = apiClient as jest.MockedFunction<typeof apiClient>;
 
-const SESSION_KEY = "earnproof.session";
 
 const SESSION = {
   token: "test-token",
@@ -50,15 +50,15 @@ const XLM_PAYMENT = {
 describe("AggregateEarningsProofWizard", () => {
   beforeEach(() => {
     mockedApiClient.mockReset();
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(SESSION));
+    storeSession(SESSION);
   });
 
   afterEach(() => {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession();
   });
 
   it("verifies deployment metadata before requesting a wallet signature, and blocks connecting when it's unavailable (#185)", async () => {
-    window.localStorage.removeItem(SESSION_KEY); // start unauthenticated, so the Connect Freighter button renders
+    clearStoredSession(); // start unauthenticated, so the Connect Freighter button renders
 
     // The gate's /deployment/metadata GET rejects; every other apiClient call
     // in this test (there should be none, if the gate correctly blocks) would
