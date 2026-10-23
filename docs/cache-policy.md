@@ -9,12 +9,12 @@ not just described here.
 
 ## Policy by route
 
-| Policy | Routes | `Cache-Control` | Why |
-| --- | --- | --- | --- |
+| Policy        | Routes                                                                                                                            | `Cache-Control`                      | Why                                                                                                                                                                                                                           |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Public static | Everything not listed below (`/`, `/how-it-works`, `/privacy`, `/developers`, `/faq`, `/about`, `/contact`, `/terms`, `/issuers`) | `public, max-age=0, must-revalidate` | Non-sensitive marketing/education content. Safe for a shared cache or browser to store, but must always revalidate rather than serve indefinitely, since these pages ship over normal deploys, not a CDN-fingerprinted build. |
-| Health | `/status` | `no-store, private` | This app's own health/monitoring surface (the actual `GET /health` endpoint lives on `earnproof-backend`, see [lib/health-check.ts](../lib/health-check.ts)). A cached status page defeats the point of a status page. |
-| Verification | `/verify/:path*` (`/verify`, `/verify/credential`, `/verify/scan`) | `no-store, private` | Public but privacy- and time-sensitive: a `VALID`/`EXPIRED`/`REVOKED` result must never be served stale from a shared cache, and must not linger in browser history/back-forward navigation as if it were still current. |
-| Authenticated | `/proofs/:path*` (`/proofs`) | `no-store, private` | Wallet-authenticated payment sync, classification, and proof creation. Never eligible for any shared caching. |
+| Health        | `/status`                                                                                                                         | `no-store, private`                  | This app's own health/monitoring surface (the actual `GET /health` endpoint lives on `earnproof-backend`, see [lib/health-check.ts](../lib/health-check.ts)). A cached status page defeats the point of a status page.        |
+| Verification  | `/verify/:path*` (`/verify`, `/verify/credential`, `/verify/scan`)                                                                | `no-store, private`                  | Public but privacy- and time-sensitive: a `VALID`/`EXPIRED`/`REVOKED` result must never be served stale from a shared cache, and must not linger in browser history/back-forward navigation as if it were still current.      |
+| Authenticated | `/proofs/:path*` (`/proofs`), `/settings/:path*` (`/settings`)                                                                    | `no-store, private`                  | Wallet-authenticated payment sync, classification, proof creation, and account/organization settings (API keys, payment methods, sessions, audit log, trusted sources). Never eligible for any shared caching.                |
 
 The rule source of truth is [config/cache-headers.ts](../config/cache-headers.ts),
 consumed by [next.config.ts](../next.config.ts) alongside the security
@@ -56,7 +56,7 @@ be superseded before it resolves:
   used by the status page): every fetch is tied to an `AbortController`,
   and the previous controller is aborted before a new request starts. On
   top of that, both the success and failure handlers check that the
-  request that just settled is still the *current* one
+  request that just settled is still the _current_ one
   (`controllerRef.current === controller`) before calling `setState` —
   guarding against an environment where an aborted fetch's promise still
   settles instead of rejecting. See
@@ -74,7 +74,7 @@ be superseded before it resolves:
 `useHealthCheck` retains the last successfully fetched `data` across a
 failed refresh (so the status page doesn't blank out on a transient
 network blip) but now also reports `isDataLive: boolean`. It is `true`
-only immediately after the *most recent* check succeeded; a failed refresh
+only immediately after the _most recent_ check succeeded; a failed refresh
 flips it to `false` without discarding the retained data. The status page
 (`app/status/page.tsx`) uses this to render an explicit "Showing the last
 known status as of `<time>`... this is not necessarily the current state"
@@ -91,7 +91,7 @@ can still be restored from Firefox's bfcache on back/forward navigation in
 some versions. There is no purely header-based fix for this; treat it as a
 documented gap, not a bug to silently work around with JavaScript
 `pagehide`/`pageshow` handlers without discussing the UX trade-off first
-(those handlers can themselves break bfcache for browsers that *do* support
+(those handlers can themselves break bfcache for browsers that _do_ support
 it). If `docs/browser-support.md` exists in this repository (tracked
 separately — see issue #85), it names the specific browsers this is
 validated against.

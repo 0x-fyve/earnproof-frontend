@@ -8,6 +8,7 @@ import {
 } from "@/lib/credentials/export";
 import { verifyDigest, type DigestVerificationResult } from "@/lib/credentials/verify-digest";
 import { formatMessage } from "@/lib/i18n";
+import { useAnnounce } from "@/lib/a11y/announcer-context";
 
 export function ArtifactExport({
   plan,
@@ -17,6 +18,7 @@ export function ArtifactExport({
   title: string;
 }) {
   const dialogId = useId();
+  const { announce } = useAnnounce();
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,9 +40,12 @@ export function ArtifactExport({
     try {
       await copyTextToClipboard(plan!.body);
       setStatus("Copied to clipboard.");
+      announce("Copied to clipboard.", { source: "export" });
       setOpen(false);
     } catch {
-      setError("Clipboard copy was blocked. You can retry or download the file instead.");
+      const message = "Clipboard copy was blocked. You can retry or download the file instead.";
+      setError(message);
+      announce(message, { politeness: "assertive", source: "export" });
     }
   }
 
@@ -58,19 +63,20 @@ export function ArtifactExport({
       setDigestResult(result);
 
       if (result.status === "mismatch") {
-        setError(
-          "The exported file's integrity check did not match. Nothing was downloaded — please retry.",
-        );
+        const message =
+          "The exported file's integrity check did not match. Nothing was downloaded — please retry.";
+        setError(message);
+        announce(message, { politeness: "assertive", source: "export" });
         setDownloadFailed(true);
         return;
       }
       if (result.status === "unsupported-algorithm") {
-        setError(
-          formatMessage(
-            "Cannot verify this export (unsupported integrity algorithm: {algorithm}). Nothing was downloaded.",
-            { algorithm: result.algorithm },
-          ),
+        const message = formatMessage(
+          "Cannot verify this export (unsupported integrity algorithm: {algorithm}). Nothing was downloaded.",
+          { algorithm: result.algorithm },
         );
+        setError(message);
+        announce(message, { politeness: "assertive", source: "export" });
         setDownloadFailed(true);
         return;
       }
@@ -80,14 +86,17 @@ export function ArtifactExport({
       // an environment that cannot verify is not the same as a verification
       // failure, and should not block a download entirely.
       downloadTextFile(plan!);
-      setStatus(
+      const successMessage =
         result.status === "verified"
           ? "Download started. Integrity verified."
-          : "Download started.",
-      );
+          : "Download started.";
+      setStatus(successMessage);
+      announce(successMessage, { source: "export" });
       setOpen(false);
     } catch {
-      setError("Download failed. Check browser permissions and try again.");
+      const message = "Download failed. Check browser permissions and try again.";
+      setError(message);
+      announce(message, { politeness: "assertive", source: "export" });
       setDownloadFailed(true);
     } finally {
       setIsVerifying(false);

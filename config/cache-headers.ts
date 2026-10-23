@@ -50,15 +50,23 @@ export function cacheHeaderRules(): CacheHeaderRule[] {
       headers: [{ key: "Cache-Control", value: NO_STORE }],
     },
     {
-      // Wallet-authenticated payment/proof-creation flows. Never eligible
-      // for shared caching, and `no-store` additionally keeps these pages
-      // out of the browser's back/forward cache in every engine that
-      // treats `no-store` as bfcache-ineligible (Chromium, WebKit).
-      // Firefox's bfcache does not currently key off Cache-Control at all,
-      // so this is a defense-in-depth measure, not a complete guarantee —
-      // see docs/cache-policy.md for the full caveat.
+      // Wallet-authenticated payment/proof-creation flows, plus the
+      // account/organization settings surface (API keys, payment methods,
+      // sessions, audit log, trusted sources, etc. — see app/settings/*).
+      // Never eligible for shared caching, and `no-store` additionally
+      // keeps these pages out of the browser's back/forward cache in every
+      // engine that treats `no-store` as bfcache-ineligible (Chromium,
+      // WebKit). Firefox's bfcache does not currently key off
+      // Cache-Control at all, so this is a defense-in-depth measure, not a
+      // complete guarantee — see docs/cache-policy.md for the full caveat,
+      // and lib/auth/bfcache-guard.ts for the client-side backstop.
       policy: "authenticated",
       source: "/proofs/:path*",
+      headers: [{ key: "Cache-Control", value: NO_STORE }],
+    },
+    {
+      policy: "authenticated",
+      source: "/settings/:path*",
       headers: [{ key: "Cache-Control", value: NO_STORE }],
     },
   ];

@@ -4,8 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CreateSupportedAssetForm } from "./create-supported-asset-form";
 import { SupportedAssetList } from "./supported-asset-list";
 import { listSupportedAssets, type SupportedAssetRecord } from "@/lib/supported-assets/store";
-
-const SESSION_KEY = "earnproof.session";
+import { readStoredSession } from "@/lib/session";
 
 type SessionData = {
   token: string;
@@ -14,24 +13,6 @@ type SessionData = {
     role: string;
   };
 };
-
-function readStoredSession(): SessionData | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const stored = window.localStorage.getItem(SESSION_KEY);
-  if (!stored) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(stored) as SessionData;
-  } catch {
-    window.localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-}
 
 export function SupportedAssetManagement() {
   const [session] = useState<SessionData | null>(() => readStoredSession());

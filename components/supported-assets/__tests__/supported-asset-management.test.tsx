@@ -1,13 +1,10 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { SupportedAssetManagement } from "../supported-asset-management";
+import { storeSession } from "@/lib/session";
 
-const SESSION_KEY = "earnproof.session";
 
 function setSession(role: string, userId = "user-1") {
-  window.localStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify({ token: "tok", user: { id: userId, role } }),
-  );
+  storeSession({ token: "tok", user: { id: userId, role } });
 }
 
 beforeEach(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Organization } from "@/lib/api/generated/v1";
 import { isOrganizationSelectable } from "@/lib/validation/organization-context";
 import { storeOrganizationId, clearStoredOrganizationId } from "./store";
@@ -22,6 +22,14 @@ type OrganizationContextValue = {
   generation: number;
   switchOrganization: (organization: Organization) => Promise<void>;
   clearOrganization: () => void;
+  /**
+   * Drops the in-memory organization and bumps `generation` (so every
+   * org-scoped consumer discards its data) WITHOUT writing storage or
+   * notifying other tabs. Used when another tab changed the tenant (#274):
+   * `nextOrganization` must come from a fresh server response, never from the
+   * cross-tab message, and is ignored unless it is selectable.
+   */
+  resetOrganizationScope: (nextOrganization: Organization | null) => void;
   registerPendingMutation: () => () => void;
 };
 
@@ -29,15 +37,22 @@ const OrganizationContext = createContext<OrganizationContextValue | null>(null)
 
 export function OrganizationContextProvider({
   initialOrganizationId,
+  onOrganizationChanged,
   children,
 }: {
   initialOrganizationId: string | null;
+  /** Called after a LOCAL switch or clear commits (e.g. to notify other tabs). Not called by resetOrganizationScope. */
+  onOrganizationChanged?: (organizationId: string | null) => void;
   children: ReactNode;
 }) {
   const [organizationId, setOrganizationId] = useState<string | null>(initialOrganizationId);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [generation, setGeneration] = useState(0);
   const pendingMutationsRef = useRef(0);
+  const onOrganizationChangedRef = useRef(onOrganizationChanged);
+  useEffect(() => {
+    onOrganizationChangedRef.current = onOrganizationChanged;
+  }, [onOrganizationChanged]);
 
   const registerPendingMutation = useCallback(() => {
     pendingMutationsRef.current += 1;
@@ -70,12 +85,21 @@ export function OrganizationContextProvider({
     setOrganizationId(nextOrganization.id);
     setOrganization(nextOrganization);
     setGeneration((value) => value + 1);
+    onOrganizationChangedRef.current?.(nextOrganization.id);
   }, []);
 
   const clearOrganization = useCallback(() => {
     clearStoredOrganizationId();
     setOrganizationId(null);
     setOrganization(null);
+    setGeneration((value) => value + 1);
+    onOrganizationChangedRef.current?.(null);
+  }, []);
+
+  const resetOrganizationScope = useCallback((nextOrganization: Organization | null) => {
+    const selectable = nextOrganization && isOrganizationSelectable(nextOrganization) ? nextOrganization : null;
+    setOrganizationId(selectable?.id ?? null);
+    setOrganization(selectable);
     setGeneration((value) => value + 1);
   }, []);
 
@@ -86,9 +110,18 @@ export function OrganizationContextProvider({
       generation,
       switchOrganization,
       clearOrganization,
+      resetOrganizationScope,
       registerPendingMutation,
     }),
-    [organizationId, organization, generation, switchOrganization, clearOrganization, registerPendingMutation],
+    [
+      organizationId,
+      organization,
+      generation,
+      switchOrganization,
+      clearOrganization,
+      resetOrganizationScope,
+      registerPendingMutation,
+    ],
   );
 
   return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>;

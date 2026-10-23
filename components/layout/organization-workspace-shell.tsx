@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PublicShell } from "@/components/layout/public-shell";
 import { OrganizationContextProvider } from "@/lib/organization-context/context";
 import { OrganizationSwitcher } from "@/components/organizations/organization-switcher";
 import { EnvironmentContextProvider } from "@/lib/environment-context/context";
 import { EnvironmentSwitcher } from "@/components/layout/environment-switcher";
+import { TabSyncBridge } from "@/components/auth/tab-sync-bridge";
+import { getTabSyncCoordinator } from "@/lib/auth/tab-sync-coordinator";
 import { readStoredOrganizationId } from "@/lib/organization-context/store";
 import { getOrganizations } from "@/lib/api/organizations";
 import type { Organization } from "@/lib/api/generated/v1";
@@ -18,57 +20,81 @@ import { readStoredSession } from "@/lib/session";
  * useOrganizationContext rather than accepting an organizationId prop, so
  * a switch always resets their local state through the shared
  * `generation` counter.
+ *
+ * Cross-tab sync (#274): a local organization switch is announced to other
+ * tabs, and TabSyncBridge applies downgrades received from them (dropping
+ * tenant data, re-checking access with the server, or locking on logout).
  */
 export function OrganizationWorkspaceShell({ children }: { children: React.ReactNode }) {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const initialOrganizationId = readStoredOrganizationId();
+  const [initialOrganizationId] = useState(readStoredOrganizationId);
+  const inFlightRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
+  // Only the latest request may update state: starting a new one aborts the
+  // previous one, so a slow earlier response can never overwrite a newer one.
+  const refetchOrganizations = useCallback(async (): Promise<Organization[] | null> => {
+    inFlightRef.current?.abort();
     const session = readStoredSession();
     if (!session) {
-      return;
+      inFlightRef.current = null;
+      return null;
     }
 
-    let active = true;
-    void Promise.resolve().then(async () => {
-      const controller = new AbortController();
-      try {
-        const result = await getOrganizations(session.token, controller.signal);
-        if (active) {
-          setOrganizations(result);
-        }
-      } catch {
-        if (active) {
-          setLoadError("Could not load organizations.");
-        }
+    const controller = new AbortController();
+    inFlightRef.current = controller;
+    try {
+      const result = await getOrganizations(session.token, controller.signal);
+      if (controller.signal.aborted) return null;
+      setOrganizations(result);
+      setLoadError(null);
+      return result;
+    } catch {
+      if (!controller.signal.aborted) {
+        setLoadError("Could not load organizations.");
       }
-    });
+      return null;
+    }
+  }, []);
 
+  useEffect(() => {
+    void Promise.resolve().then(refetchOrganizations);
     return () => {
-      active = false;
+      inFlightRef.current?.abort();
     };
+  }, [refetchOrganizations]);
+
+  const announceOrganizationChange = useCallback((organizationId: string | null) => {
+    getTabSyncCoordinator()?.publish(
+      "tenant_switched",
+      organizationId === null ? undefined : { tenantId: organizationId },
+    );
   }, []);
 
   return (
-    <OrganizationContextProvider initialOrganizationId={initialOrganizationId}>
+    <OrganizationContextProvider
+      initialOrganizationId={initialOrganizationId}
+      onOrganizationChanged={announceOrganizationChange}
+    >
       <EnvironmentContextProvider>
         <PublicShell>
-          <div className="border-b border-white/10 bg-white/[0.02] px-4 py-3 sm:px-8">
-            {loadError ? (
-              <p className="text-xs text-rose-200" role="alert">
-                {loadError}
-              </p>
-            ) : (
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="max-w-xs">
-                  <OrganizationSwitcher organizations={organizations} />
+          <TabSyncBridge refetchOrganizations={refetchOrganizations}>
+            <div className="border-b border-white/10 bg-white/[0.02] px-4 py-3 sm:px-8">
+              {loadError ? (
+                <p className="text-xs text-rose-200" role="alert">
+                  {loadError}
+                </p>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="max-w-xs">
+                    <OrganizationSwitcher organizations={organizations} />
+                  </div>
+                  <EnvironmentSwitcher />
                 </div>
-                <EnvironmentSwitcher />
-              </div>
-            )}
-          </div>
-          {children}
+              )}
+            </div>
+            {children}
+          </TabSyncBridge>
         </PublicShell>
       </EnvironmentContextProvider>
     </OrganizationContextProvider>

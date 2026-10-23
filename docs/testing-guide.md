@@ -146,24 +146,22 @@ through `CreateProofFlow`'s internal `getFreighterAddress()` /
 `signFreighterMessage()` helpers, which dynamically `import()` the
 package on demand. For a unit test that needs an authenticated session
 without exercising the wallet-connect UI at all, skip Freighter
-entirely and seed `localStorage` directly — `CreateProofFlow` reads its
-session from there on mount:
+entirely and seed the in-memory session with `storeSession` from
+`@/lib/session` (the session is never in `localStorage`; `jest.setup.ts`
+resets it between tests):
 
 ```tsx
-const SESSION_KEY = "earnproof.session";
+import { storeSession, clearStoredSession } from "@/lib/session";
 
 beforeEach(() => {
-  window.localStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify({
-      token: "test-token",
-      user: { id: "user-1", walletAddress: "GABC...TEST", walletHash: "wh_test", role: "worker" },
-    }),
-  );
+  storeSession({
+    token: "test-token",
+    user: { id: "user-1", walletAddress: "GABC...TEST", walletHash: "wh_test", role: "WORKER" },
+  });
 });
 
 afterEach(() => {
-  window.localStorage.removeItem(SESSION_KEY);
+  clearStoredSession();
 });
 ```
 

@@ -194,14 +194,28 @@ export function PaymentList() {
 
 ### 5. Multi-Tab Session Sync
 
-The system automatically syncs logout, token rotation, and wallet changes across tabs. No additional code needed - just ensure `AuthSessionProvider` is in the root layout.
+Wallet logout (`clearStoredSession()`), session revocation, recent-auth expiry
+(`useRecentAuth`) and organization switches (inside `OrganizationWorkspaceShell`)
+are propagated to other tabs automatically. To react to them elsewhere,
+subscribe to the coordinator and only ever downgrade:
+
+```typescript
+const sync = getTabSyncCoordinator();
+useEffect(() => sync?.subscribe((event) => {
+  if (event.level >= TAB_SYNC_RESTRICTIVENESS.wallet_logout) dropPrivateState();
+}), [sync]);
+```
+
+Never use a received `tenantId` (or anything else in a message) to grant
+access; re-fetch from the server. See
+[docs/cross-tab-sync.md](../../docs/cross-tab-sync.md).
 
 ## Migration Path for Existing Code
 
 ### Before: Direct localStorage + apiClient
 
 ```tsx
-// Old pattern
+// Old pattern (removed: bearer tokens are never persisted, see docs/privacy.md)
 const session = JSON.parse(localStorage.getItem('earnproof.session') || '{}');
 const token = session.token;
 
@@ -212,6 +226,9 @@ await apiClient({
 
 // Logout
 localStorage.removeItem('earnproof.session');
+
+// Today: readStoredSession() / storeSession() / clearStoredSession() from
+// "@/lib/session" keep the session in memory via the TokenManager.
 ```
 
 ### After: Auth context + authenticatedApiClient

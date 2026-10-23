@@ -1,9 +1,29 @@
 /**
- * MultiTabSync: Synchronizes session state across tabs/windows.
+ * MultiTabSync: legacy session-sync API, kept for compatibility (#274).
  *
- * Uses BroadcastChannel API (with fallback to storage events for older browsers).
- * Communicates state changes but NEVER sends token material or sensitive data.
+ * @deprecated Use getTabSyncCoordinator() from ./tab-sync-coordinator.
+ *
+ * This is now a thin adapter over the versioned, validated tab-sync
+ * coordinator (BroadcastChannel with a storage-event fallback). Migration
+ * notes:
+ * - The wire protocol changed. The old adapter posted unvalidated objects on
+ *   the `earnproof-session-sync` channel; the coordinator uses
+ *   `earnproof.tab-sync.v1`. A tab still running the old bundle does not sync
+ *   with new tabs until it reloads. That is fail-safe: neither side can gain
+ *   authorization from a message.
+ * - Only downgrades cross tabs. broadcast('logout' | 'wallet_changed') sends
+ *   `wallet_logout` and broadcast('session_expired') sends
+ *   `session_revoked`. 'token_rotated' and 'session_recovered' are no
+ *   longer transmitted, because a received message must never be able to
+ *   signal that a session is (again) valid.
+ * - onSync listeners receive `logout` for wallet_logout and
+ *   `session_expired` for session_revoked. tenant_switched and
+ *   recent_auth_expired are not mapped; subscribe to the coordinator for
+ *   those.
  */
+
+import { getTabSyncCoordinator, type TabSyncEvent } from './tab-sync-coordinator';
+import type { TabSyncEventType } from './tab-sync-protocol';
 
 export type SyncMessageType =
   | 'session_expired'
@@ -21,21 +41,20 @@ export interface SyncMessage {
 
 export type SyncListener = (message: SyncMessage) => void;
 
-/**
- * MultiTabSync broadcasts session events to other tabs.
- * Other tabs listen and invalidate local state as needed.
- */
-export class MultiTabSync {
-  private static instance: MultiTabSync;
-  private channel: BroadcastChannel | null = null;
-  private listeners: Set<SyncListener> = new Set();
-  private tabId: string;
-  private readonly CHANNEL_NAME = 'earnproof-session-sync';
+const OUTBOUND: Partial<Record<SyncMessageType, TabSyncEventType>> = {
+  logout: 'wallet_logout',
+  wallet_changed: 'wallet_logout',
+  session_expired: 'session_revoked',
+};
 
-  private constructor() {
-    this.tabId = this.generateTabId();
-    this.initializeChannel();
-  }
+const INBOUND: Partial<Record<TabSyncEventType, SyncMessageType>> = {
+  wallet_logout: 'logout',
+  session_revoked: 'session_expired',
+};
+
+export class MultiTabSync {
+  private static instance: MultiTabSync | null = null;
+  private unsubscribers: Set<() => void> = new Set();
 
   static getInstance(): MultiTabSync {
     if (!MultiTabSync.instance) {
@@ -45,103 +64,55 @@ export class MultiTabSync {
   }
 
   /**
-   * Initialize BroadcastChannel if available.
-   */
-  private initializeChannel(): void {
-    if (typeof window === 'undefined') return;
-
-    try {
-      this.channel = new BroadcastChannel(this.CHANNEL_NAME);
-      this.channel.onmessage = (event) => {
-        try {
-          const message = event.data as SyncMessage;
-          // Only process messages from other tabs
-          if (message.sourceTabId !== this.tabId) {
-            this.emitToListeners(message);
-          }
-        } catch (error) {
-          console.error('Sync message processing error:', error);
-        }
-      };
-    } catch {
-      // BroadcastChannel not supported; communication disabled
-      console.debug('BroadcastChannel not available; multi-tab sync disabled');
-    }
-  }
-
-  /**
-   * Broadcast a message to other tabs.
-   * Message contains NO sensitive data.
+   * Broadcast a legacy message type to other tabs. Types without a
+   * downgrade equivalent are dropped.
    */
   broadcast(type: SyncMessageType): void {
-    if (!this.channel) return;
-
-    const message: SyncMessage = {
-      type,
-      timestamp: Date.now(),
-      sourceTabId: this.tabId,
-    };
-
-    try {
-      this.channel.postMessage(message);
-    } catch (error) {
-      console.error('Failed to broadcast sync message:', error);
-    }
+    const mapped = OUTBOUND[type];
+    if (!mapped) return;
+    getTabSyncCoordinator()?.publish(mapped);
   }
 
   /**
    * Subscribe to sync messages from other tabs.
    */
   onSync(listener: SyncListener): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    const coordinator = getTabSyncCoordinator();
+    if (!coordinator) return () => undefined;
+
+    const unsubscribe = coordinator.subscribe((event: TabSyncEvent) => {
+      const type = INBOUND[event.type];
+      if (!type) return;
+      listener({ type, timestamp: event.receivedAt, sourceTabId: event.sourceTabId });
+    });
+    this.unsubscribers.add(unsubscribe);
+    return () => {
+      unsubscribe();
+      this.unsubscribers.delete(unsubscribe);
+    };
   }
 
   /**
    * Get this tab's unique ID (for message filtering).
    */
   getTabId(): string {
-    return this.tabId;
+    return getTabSyncCoordinator()?.tabId ?? '';
   }
 
   /**
-   * Emit to all listeners (internal use).
-   */
-  private emitToListeners(message: SyncMessage): void {
-    this.listeners.forEach((listener) => {
-      try {
-        listener(message);
-      } catch (error) {
-        console.error('Sync listener error:', error);
-      }
-    });
-  }
-
-  /**
-   * Generate a unique tab ID (uuidv4-like).
-   */
-  private generateTabId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  /**
-   * Cleanup (on app unmount).
+   * Removes this adapter's listeners. The shared coordinator stays open for
+   * its other subscribers; it closes itself on page hide.
    */
   destroy(): void {
-    if (this.channel) {
-      this.channel.close();
-      this.channel = null;
-    }
+    this.unsubscribers.forEach((unsubscribe) => unsubscribe());
+    this.unsubscribers.clear();
   }
 
   /**
    * Reset for testing.
    */
   static reset(): void {
-    if (MultiTabSync.instance) {
-      MultiTabSync.instance.destroy();
-      MultiTabSync.instance.listeners.clear();
-    }
-    MultiTabSync.instance = null as any;
+    MultiTabSync.instance?.destroy();
+    MultiTabSync.instance = null;
   }
 }

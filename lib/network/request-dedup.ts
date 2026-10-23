@@ -7,7 +7,13 @@
  * - Race conditions from concurrent requests
  * - Out-of-order response issues
  *
- * Keyed by request method + URL to identify logical equivalence.
+ * Keyed by request method + URL + a discriminator (#330). The discriminator
+ * must capture everything that makes two requests to the same URL
+ * logically DIFFERENT responses: auth identity, tenant/org scope, network/
+ * environment, any header that varies the response (e.g. Accept-Language,
+ * If-None-Match), and a freshness marker. Two requests that differ on any
+ * of these must never share a coalesced promise — getting this wrong would
+ * let one user's cached response leak into another user's/tenant's result.
  */
 
 type RequestKey = string;
@@ -19,10 +25,57 @@ type PendingRequest<T> = {
 const pendingRequests = new Map<RequestKey, PendingRequest<unknown>>();
 
 /**
- * Generate a deduplication key from method and URL.
+ * Headers (case-insensitive) whose value is included in the dedup key
+ * because it changes what response is semantically correct for the
+ * request: who's asking (auth), what tenant/org/network scope they're
+ * asking in, what representation they want, and what freshness they
+ * require. Any other header (e.g. a tracing/telemetry header) does not
+ * affect the response and is intentionally excluded so it can't
+ * accidentally defeat coalescing.
  */
-function makeKey(method: string, url: string): RequestKey {
-  return `${method.toUpperCase()} ${url}`;
+const DISCRIMINATING_HEADERS = [
+  "authorization",
+  "x-organization-id",
+  "x-tenant-id",
+  "x-network",
+  "x-stellar-network",
+  "accept-language",
+  "if-none-match",
+  "cache-control",
+] as const;
+
+export type DedupHeadersInput = HeadersInit | undefined;
+
+function normalizeHeaders(headers: DedupHeadersInput): Headers | undefined {
+  if (!headers) return undefined;
+  return headers instanceof Headers ? headers : new Headers(headers);
+}
+
+/**
+ * Build the discriminator segment of the dedup key from the subset of
+ * request headers that affect response identity (#330). Two requests
+ * with different auth, tenant, network, or freshness headers always
+ * produce different discriminators and therefore never coalesce.
+ */
+function headerDiscriminator(headers: DedupHeadersInput): string {
+  const normalized = normalizeHeaders(headers);
+  if (!normalized) return "";
+  const parts: string[] = [];
+  for (const name of DISCRIMINATING_HEADERS) {
+    const value = normalized.get(name);
+    if (value !== null) parts.push(`${name}=${value}`);
+  }
+  return parts.join("&");
+}
+
+/**
+ * Generate a deduplication key from method, URL, and discriminating headers.
+ */
+function makeKey(method: string, url: string, headers?: DedupHeadersInput): RequestKey {
+  const discriminator = headerDiscriminator(headers);
+  return discriminator
+    ? `${method.toUpperCase()} ${url} :: ${discriminator}`
+    : `${method.toUpperCase()} ${url}`;
 }
 
 /**
@@ -40,8 +93,9 @@ export async function dedupRequest<T>(
   url: string,
   execute: (signal: AbortSignal) => Promise<T>,
   signal?: AbortSignal,
+  headers?: DedupHeadersInput,
 ): Promise<T> {
-  const key = makeKey(method, url);
+  const key = makeKey(method, url, headers);
 
   // Check if request is already in flight
   const existing = pendingRequests.get(key);
@@ -112,7 +166,7 @@ export function clearPendingRequests(): void {
 /**
  * Check if a request is currently pending (for testing).
  */
-export function isPending(method: string, url: string): boolean {
-  const key = makeKey(method, url);
+export function isPending(method: string, url: string, headers?: DedupHeadersInput): boolean {
+  const key = makeKey(method, url, headers);
   return pendingRequests.has(key);
 }

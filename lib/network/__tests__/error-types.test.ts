@@ -1,4 +1,3 @@
-import { describe, it, expect } from "vitest";
 import {
   classifyNetworkFailure,
   canRetry,
@@ -13,7 +12,7 @@ describe("error-types", () => {
 
       expect(failure.type).toBe("offline");
       expect(failure.retryable).toBe(true);
-      expect(failure.message).toContain("offline");
+      expect(failure.message).toContain("internet connection");
     });
 
     it("classifies timeout failures (TimeoutError)", () => {
@@ -90,13 +89,14 @@ describe("error-types", () => {
       expect(failure.retryable).toBe(false);
     });
 
-    it("classifies 429 rate limit as retryable", () => {
+    it("classifies 429 as its own rate-limited type, retryable", () => {
       const error = new Error("Too Many Requests");
       const response = { status: 429 };
       const failure = classifyNetworkFailure(error, response);
 
-      expect(failure.type).toBe("server-error");
+      expect(failure.type).toBe("rate-limited");
       expect(failure.retryable).toBe(true);
+      expect(failure.statusCode).toBe(429);
     });
 
     it("classifies unknown errors as unknown", () => {
@@ -129,6 +129,15 @@ describe("error-types", () => {
 
     it("allows retry for server errors", () => {
       const failure = createFailure("server-error");
+      expect(canRetry(failure, true)).toBe(true);
+      expect(canRetry(failure, false)).toBe(true);
+    });
+
+    it("allows retry for rate-limited failures regardless of idempotency", () => {
+      // canRetry itself doesn't gate on mutation safety — that's a
+      // separate check in retry-orchestrator.ts's isMutationSafeToRetry,
+      // which callers must combine with this.
+      const failure = createFailure("rate-limited");
       expect(canRetry(failure, true)).toBe(true);
       expect(canRetry(failure, false)).toBe(true);
     });

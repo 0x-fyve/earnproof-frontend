@@ -3,9 +3,17 @@
 import { useRef, useState } from "react";
 import { apiClient } from "@/lib/api/client";
 import { BatchCredentialDropZone } from "./batch-credential-drop-zone";
-import { BatchCredentialItemRow, type BatchItem } from "./batch-credential-item-row";
+import {
+  BatchCredentialItemRow,
+  type BatchItem,
+} from "./batch-credential-item-row";
 import type { VerifyProofResponse } from "./verification-panel";
-import { checkBatchFile, acceptBatchItem, MAX_BATCH_ITEMS, MAX_BATCH_TOTAL_BYTES } from "@/lib/validation/batch-credential-verification";
+import {
+  checkBatchFile,
+  acceptBatchItem,
+  MAX_BATCH_ITEMS,
+  MAX_BATCH_TOTAL_BYTES,
+} from "@/lib/validation/batch-credential-verification";
 
 /**
  * Batch credential verification workspace (#183). Every item's raw text
@@ -29,11 +37,15 @@ export function BatchCredentialWorkspace() {
   }
 
   function updateItem(key: string, patch: Partial<BatchItem>) {
-    setItems((prev) => prev.map((item) => (item.key === key ? { ...item, ...patch } : item)));
+    setItems((prev) =>
+      prev.map((item) => (item.key === key ? { ...item, ...patch } : item)),
+    );
   }
 
   function existingIds(): string[] {
-    return items.map((item) => item.credentialId).filter((id): id is string => id !== null);
+    return items
+      .map((item) => item.credentialId)
+      .filter((id): id is string => id !== null);
   }
 
   async function handleFilesSelected(files: File[]) {
@@ -198,6 +210,30 @@ export function BatchCredentialWorkspace() {
     setIsVerifying(false);
   }
 
+  /**
+   * Retries only the items that failed (network/server error), leaving
+   * rejected (client-side validation), verified, and cancelled items
+   * untouched. Re-verifying resets a failed item back to "pending" first
+   * so verifyItem's existing per-item flow runs unchanged.
+   */
+  async function retryFailed() {
+    setBatchError(null);
+    cancelledRef.current = false;
+    setIsVerifying(true);
+
+    const failed = items.filter((item) => item.status === "failed");
+    setItems((prev) =>
+      prev.map((item) =>
+        item.status === "failed" ? { ...item, status: "pending" } : item,
+      ),
+    );
+    await Promise.all(
+      failed.map((item) => verifyItem({ ...item, status: "pending" })),
+    );
+
+    setIsVerifying(false);
+  }
+
   function cancelAll() {
     cancelledRef.current = true;
     for (const controller of abortControllersRef.current.values()) {
@@ -206,7 +242,45 @@ export function BatchCredentialWorkspace() {
     setIsVerifying(false);
   }
 
-  const canVerify = items.some((item) => item.status === "pending") && !isVerifying;
+  /**
+   * Exports the batch's failed items as a JSON file the caller can fix up
+   * and re-import via "Or paste credential JSON" / drag-and-drop, without
+   * needing to re-locate which of the original inputs failed. Only
+   * `credentialId` and `label` are included — never raw credential JSON or
+   * verification results, consistent with this workspace never persisting
+   * credential content beyond the page's lifetime.
+   */
+  function exportFailed() {
+    const failed = items.filter((item) => item.status === "failed");
+    if (failed.length === 0) {
+      return;
+    }
+
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      failedItems: failed.map((item) => ({
+        credentialId: item.credentialId,
+        label: item.label,
+      })),
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `batch-verification-failures-${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  const canVerify =
+    items.some((item) => item.status === "pending") && !isVerifying;
+  const failedCount = items.filter((item) => item.status === "failed").length;
+  const canRetryFailed = failedCount > 0 && !isVerifying;
 
   return (
     <div className="grid gap-6">
@@ -214,15 +288,21 @@ export function BatchCredentialWorkspace() {
         <div>
           <h2 className="text-xl font-semibold text-white">Add credentials</h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Upload up to {MAX_BATCH_ITEMS} .json credential files, or paste entries manually.
-            Nothing here is saved once you leave this page.
+            Upload up to {MAX_BATCH_ITEMS} .json credential files, or paste
+            entries manually. Nothing here is saved once you leave this page.
           </p>
         </div>
 
-        <BatchCredentialDropZone onFilesSelected={handleFilesSelected} disabled={isVerifying} />
+        <BatchCredentialDropZone
+          onFilesSelected={handleFilesSelected}
+          disabled={isVerifying}
+        />
 
         <div className="grid gap-2">
-          <label className="text-xs font-semibold text-slate-300" htmlFor="batch-manual-entry">
+          <label
+            className="text-xs font-semibold text-slate-300"
+            htmlFor="batch-manual-entry"
+          >
             Or paste credential JSON
           </label>
           <textarea
@@ -252,7 +332,9 @@ export function BatchCredentialWorkspace() {
       {items.length > 0 && (
         <section className="grid gap-4 rounded-lg border border-white/10 bg-white/[0.04] p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white">Batch ({items.length})</h2>
+            <h2 className="text-xl font-semibold text-white">
+              Batch ({items.length})
+            </h2>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -271,6 +353,26 @@ export function BatchCredentialWorkspace() {
                   Cancel
                 </button>
               )}
+              {failedCount > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void retryFailed()}
+                    disabled={!canRetryFailed}
+                    className="h-9 rounded-md border border-amber-300/40 px-3 text-xs font-semibold text-amber-200 disabled:opacity-50"
+                  >
+                    Retry failed ({failedCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportFailed}
+                    disabled={isVerifying}
+                    className="h-9 rounded-md border border-white/15 px-3 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    Export failed
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={clearBatch}
@@ -284,7 +386,10 @@ export function BatchCredentialWorkspace() {
 
           <ul className="grid gap-2" aria-label="Batch verification results">
             {items.map((item) => (
-              <li key={item.key} className="grid grid-cols-[1fr_auto] items-start gap-2">
+              <li
+                key={item.key}
+                className="grid grid-cols-[1fr_auto] items-start gap-2"
+              >
                 <BatchCredentialItemRow item={item} />
                 <button
                   type="button"

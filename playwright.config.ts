@@ -10,17 +10,21 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
  * interception rather than a live network call — this constant only needs
  * to be a stable, unique origin for the fixtures to key off.
  */
-const MOCK_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4010/api/v1";
+const MOCK_API_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4010/api/v1";
 
 export default defineConfig({
   testDir: "./e2e",
-  // The accessibility suite lives under e2e/accessibility and the visual
-  // regression suite lives under e2e/visual, each with its own dedicated
-  // config (playwright.a11y.config.ts / playwright.visual.config.ts) using
-  // different projects, worker counts, and thresholds — exclude both here
-  // so they aren't also picked up (and run under the wrong settings) by
-  // this general functional e2e config.
-  testIgnore: ["**/visual/**", "**/accessibility/**"],
+  // The accessibility suite lives under e2e/accessibility, the visual
+  // regression suite lives under e2e/visual, and the live API contract
+  // smoke suite lives under e2e/api, each with its own dedicated config
+  // (playwright.a11y.config.ts / playwright.visual.config.ts /
+  // playwright.api-smoke.config.ts) using different projects, worker
+  // counts, and — for e2e/api specifically — no mocked webServer at all
+  // (it talks to a real backend) — exclude all three here so they aren't
+  // also picked up (and run under the wrong settings, or made to wait on
+  // a webServer they don't use) by this general functional e2e config.
+  testIgnore: ["**/visual/**", "**/accessibility/**", "**/api/**"],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

@@ -6,6 +6,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AnchoringOperationsManagement } from "../anchoring-operations-management";
 import { getAnchoringOperations, retryAnchoringOperation, type AnchoringOperation } from "@/lib/api/anchoring";
+import { storeSession, clearStoredSession } from "@/lib/session";
 
 jest.mock("@/lib/api/anchoring", () => {
   const actual = jest.requireActual("@/lib/api/anchoring");
@@ -20,7 +21,6 @@ jest.mock("@/lib/api/anchoring", () => {
 const mockedGetOperations = getAnchoringOperations as jest.MockedFunction<typeof getAnchoringOperations>;
 const mockedRetry = retryAnchoringOperation as jest.MockedFunction<typeof retryAnchoringOperation>;
 
-const SESSION_KEY = "earnproof.session";
 
 const ADMIN_SESSION = {
   token: "test-token",
@@ -52,7 +52,7 @@ const PROCESSING_OPERATION = {
 
 describe("AnchoringOperationsManagement authorization", () => {
   afterEach(() => {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession();
   });
 
   it("prompts to connect a wallet when there is no session", () => {
@@ -61,7 +61,7 @@ describe("AnchoringOperationsManagement authorization", () => {
   });
 
   it("shows an access-restricted message for a non-admin session", () => {
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(WORKER_SESSION));
+    storeSession(WORKER_SESSION);
     render(<AnchoringOperationsManagement />);
     expect(screen.getByText("Access Restricted")).toBeInTheDocument();
   });
@@ -71,11 +71,11 @@ describe("AnchoringOperationsManagement for an admin session", () => {
   beforeEach(() => {
     mockedGetOperations.mockReset();
     mockedRetry.mockReset();
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(ADMIN_SESSION));
+    storeSession(ADMIN_SESSION);
   });
 
   afterEach(() => {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession();
   });
 
   it("renders operations with a retry control enabled only for a transient failure", async () => {

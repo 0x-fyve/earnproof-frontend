@@ -42,6 +42,7 @@ complete the task through:
 | `navigator.sendBeacon` | Best-effort web-vitals reporting ([lib/diagnostics/web-vitals-sink.ts](../lib/diagnostics/web-vitals-sink.ts)) | `typeof navigator === "undefined" \|\| !navigator.sendBeacon` | Reporting is silently skipped — this is telemetry, not a user-facing flow, so there is no user-visible fallback state |
 | `navigator.mediaDevices.getUserMedia` | Camera access for QR scanning ([components/verification/verify-scan.tsx](../components/verification/verify-scan.tsx)) | `!navigator.mediaDevices?.getUserMedia` | User sees "Camera scanning is not available in this browser. Upload an image or enter the proof ID." and can complete verification through the upload or manual-entry path on the same page |
 | `window.BarcodeDetector` | Live QR decoding once the camera stream is open | `!window.BarcodeDetector` | Same accessible fallback message and upload/manual-entry path as above |
+| `BroadcastChannel` | Cross-tab logout/revocation/tenant sync ([lib/storage/tab-sync-transport.ts](../lib/storage/tab-sync-transport.ts)) | `typeof window.BroadcastChannel !== "function"` or the constructor throws | `storage` events on the `earnproof.tab-sync.v1` key; if storage is also unavailable, sync is off and each tab still enforces auth with the server on its own |
 
 ### QR scanning (`/verify/scan`)
 

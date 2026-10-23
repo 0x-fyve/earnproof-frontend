@@ -1,0 +1,926 @@
+[
+  {
+    "route": "/about",
+    "filePath": "app/about/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/accessibility",
+    "filePath": "app/accessibility/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/contact",
+    "filePath": "app/contact/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/developers/api-keys",
+    "filePath": "app/developers/api-keys/page.tsx",
+    "exempt": false,
+    "declaredOwn": true,
+    "inherited": false,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/developers",
+    "filePath": "app/developers/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/developers/quickstart",
+    "filePath": "app/developers/quickstart/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/developers/webhooks",
+    "filePath": "app/developers/webhooks/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/embed/v1/verify/[id]",
+    "filePath": "app/embed/v1/verify/[id]/page.tsx",
+    "exempt": false,
+    "declaredOwn": true,
+    "inherited": false,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/faq",
+    "filePath": "app/faq/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/how-it-works",
+    "filePath": "app/how-it-works/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/invitations/[token]",
+    "filePath": "app/invitations/[token]/page.tsx",
+    "exempt": false,
+    "declaredOwn": true,
+    "inherited": false,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/issuers",
+    "filePath": "app/issuers/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/issuers/veridatum-labs",
+    "filePath": "app/issuers/veridatum-labs/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/",
+    "filePath": "app/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/payments/[id]",
+    "filePath": "app/payments/[id]/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/payments/backfill",
+    "filePath": "app/payments/backfill/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/privacy",
+    "filePath": "app/privacy/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/proof-types/minimum-income",
+    "filePath": "app/proof-types/minimum-income/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/proof-types",
+    "filePath": "app/proof-types/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/proofs/[id]/dispute",
+    "filePath": "app/proofs/[id]/dispute/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/proofs/[id]/share",
+    "filePath": "app/proofs/[id]/share/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/proofs/aggregate-earnings",
+    "filePath": "app/proofs/aggregate-earnings/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/proofs/anchoring",
+    "filePath": "app/proofs/anchoring/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/proofs/employer-payment",
+    "filePath": "app/proofs/employer-payment/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/proofs/employment-continuity",
+    "filePath": "app/proofs/employment-continuity/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/proofs/history",
+    "filePath": "app/proofs/history/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/proofs/income-range",
+    "filePath": "app/proofs/income-range/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/proofs/invoice-settlement",
+    "filePath": "app/proofs/invoice-settlement/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/proofs/minimum-income",
+    "filePath": "app/proofs/minimum-income/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/proofs",
+    "filePath": "app/proofs/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/proofs/payment-receipt",
+    "filePath": "app/proofs/payment-receipt/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/proofs/recurring-income",
+    "filePath": "app/proofs/recurring-income/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/security",
+    "filePath": "app/security/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/settings/activity",
+    "filePath": "app/settings/activity/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/approvals",
+    "filePath": "app/settings/approvals/page.tsx",
+    "exempt": false,
+    "declaredOwn": true,
+    "inherited": false,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": "ADMIN",
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/assets",
+    "filePath": "app/settings/assets/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/audit",
+    "filePath": "app/settings/audit/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/governance",
+    "filePath": "app/settings/governance/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/governance-proposals",
+    "filePath": "app/settings/governance-proposals/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/issuers",
+    "filePath": "app/settings/issuers/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/notifications",
+    "filePath": "app/settings/notifications/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/organizations/[id]/archive",
+    "filePath": "app/settings/organizations/[id]/archive/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/organizations/[id]/members/[memberId]/role-request",
+    "filePath": "app/settings/organizations/[id]/members/[memberId]/role-request/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/organizations/data-residency",
+    "filePath": "app/settings/organizations/data-residency/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/organizations",
+    "filePath": "app/settings/organizations/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/organizations/role-approval",
+    "filePath": "app/settings/organizations/role-approval/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings",
+    "filePath": "app/settings/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/payments",
+    "filePath": "app/settings/payments/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/policies",
+    "filePath": "app/settings/policies/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/preferences",
+    "filePath": "app/settings/preferences/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/privacy",
+    "filePath": "app/settings/privacy/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/security",
+    "filePath": "app/settings/security/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/sessions",
+    "filePath": "app/settings/sessions/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/trusted-sources",
+    "filePath": "app/settings/trusted-sources/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/usage",
+    "filePath": "app/settings/usage/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/verifier-policies",
+    "filePath": "app/settings/verifier-policies/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/settings/wallet",
+    "filePath": "app/settings/wallet/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "protected",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/status",
+    "filePath": "app/status/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/terms",
+    "filePath": "app/terms/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "public"
+    }
+  },
+  {
+    "route": "/verify/[proofId]",
+    "filePath": "app/verify/[proofId]/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/verify/batch",
+    "filePath": "app/verify/batch/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/verify/credential",
+    "filePath": "app/verify/credential/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/verify/credentials/batch",
+    "filePath": "app/verify/credentials/batch/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/verify/offline",
+    "filePath": "app/verify/offline/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/verify",
+    "filePath": "app/verify/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  },
+  {
+    "route": "/verify/scan",
+    "filePath": "app/verify/scan/page.tsx",
+    "exempt": false,
+    "declaredOwn": false,
+    "inherited": true,
+    "malformed": false,
+    "routeAuth": {
+      "access": "public",
+      "role": null,
+      "capability": null,
+      "cache": "no-store"
+    }
+  }
+]

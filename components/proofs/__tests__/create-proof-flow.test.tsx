@@ -6,6 +6,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CreateProofFlow } from "../create-proof-flow";
 import { apiClient } from "@/lib/api/client";
+import { storeSession, clearStoredSession } from "@/lib/session";
 
 jest.mock("@/lib/api/client", () => ({
   apiClient: jest.fn(),
@@ -14,7 +15,6 @@ jest.mock("@/lib/api/client", () => ({
 
 const mockedApiClient = apiClient as jest.MockedFunction<typeof apiClient>;
 
-const SESSION_KEY = "earnproof.session";
 
 const SESSION = {
   token: "test-token",
@@ -40,11 +40,11 @@ const PAYMENT = {
 describe("CreateProofFlow payment loading state", () => {
   beforeEach(() => {
     mockedApiClient.mockReset();
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(SESSION));
+    storeSession(SESSION);
   });
 
   afterEach(() => {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession();
   });
 
   it("shows the payment list skeleton (not the empty state) while syncing", async () => {
