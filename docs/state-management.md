@@ -6,6 +6,11 @@ and explains when each approach should be used.
 The goal is to keep state predictable, avoid unnecessary duplication,
 and ensure sensitive session data is not retained after logout.
 
+Logout, session revocation, recent-auth expiry and tenant switches are
+propagated across open tabs by the tab-sync coordinator; see
+[cross-tab-sync.md](./cross-tab-sync.md). Received events may only
+downgrade local state.
+
 ---
  
 ## 1. Choosing the right state mechanism

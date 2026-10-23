@@ -17,6 +17,7 @@ import { apiClient, bearer } from "@/lib/api/client";
 import { appConfig } from "@/config/app";
 import { buildCredentialExport, buildVerificationLinkExport } from "@/lib/credentials/export";
 import { WIZARD_STEPS, DEFAULT_VALUES, type WizardStep } from "@/lib/validation/employer-payment-proofs";
+import { readStoredSession, storeSession, clearStoredSession, type Session } from "@/lib/session";
 
 type SessionUser = {
   id: string;
@@ -24,8 +25,6 @@ type SessionUser = {
   walletHash: string;
   role: string;
 };
-
-const SESSION_KEY = "earnproof.session";
 
 export function EmployerPaymentProofWizard() {
   const initialSession = useMemo(() => readStoredSession(), []);
@@ -142,10 +141,7 @@ export function EmployerPaymentProofWizard() {
         body: JSON.stringify({ challengeId: challenge.id, walletAddress, signature }),
       });
 
-      window.localStorage.setItem(
-        SESSION_KEY,
-        JSON.stringify({ token: verified.session.token, user: verified.user })
-      );
+      storeSession({ token: verified.session.token, user: verified.user } as Session);
       setToken(verified.session.token);
       setUser(verified.user);
       setStatus("Wallet authenticated.");
@@ -212,7 +208,7 @@ export function EmployerPaymentProofWizard() {
   }
 
   function disconnect() {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession();
     setToken(null);
     setUser(null);
     setPayments([]);
@@ -366,22 +362,6 @@ export function EmployerPaymentProofWizard() {
       )}
     </div>
   );
-}
-
-function readStoredSession() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  const stored = window.localStorage.getItem(SESSION_KEY);
-  if (!stored) {
-    return null;
-  }
-  try {
-    return JSON.parse(stored) as { token: string; user: SessionUser };
-  } catch {
-    window.localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
 }
 
 async function loadFreighter(): Promise<typeof import("@stellar/freighter-api")> {

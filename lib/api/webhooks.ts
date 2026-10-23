@@ -1,14 +1,18 @@
 import { apiClient, bearer, retryRead, retryMutation } from "./client";
+import type { WebhookEventFilter } from "@/lib/validation/webhook-filters";
 
 export type CreateWebhookRequest = {
   url: string;
-  events: string[];
+  events: string[]; // Legacy: still supported
+  filter?: WebhookEventFilter | null; // New: optional, overrides events
 };
 
 export type Webhook = {
   id: string;
   url: string;
-  events: string[];
+  events: string[]; // For compatibility
+  filter?: WebhookEventFilter | null;
+  filterVersion?: string; // Etag-like for conflict detection
   status: "ACTIVE" | "DISABLED";
 };
 
@@ -44,8 +48,20 @@ export type ListDeliveriesResponse = {
 
 export type UpdateWebhookRequest = {
   url?: string;
-  events?: string[];
+  events?: string[]; // Legacy
+  filter?: WebhookEventFilter | null; // New: optional
   status?: "ACTIVE" | "DISABLED";
+  filterVersion?: string; // For optimistic concurrency control
+};
+
+export type FilterPreviewResponse = {
+  matchedEventTypes: string[];
+  normalizedFilter: WebhookEventFilter;
+};
+
+export type ValidateFilterResourcesResponse = {
+  valid: boolean;
+  invalidResourceIds?: string[];
 };
 
 export async function createWebhook(
@@ -178,6 +194,46 @@ export async function listWebhookDeliveries(
       path,
       method: "GET",
       headers: bearer(token),
+      signal,
+    });
+  }, signal);
+}
+
+/**
+ * Validate filter resource IDs against current tenant
+ * Returns only invalid IDs, never revealing existence of valid ones (security)
+ */
+export async function validateFilterResources(
+  token: string,
+  resourceIds: string[],
+  signal: AbortSignal
+): Promise<ValidateFilterResourcesResponse> {
+  return retryRead(async (signal) => {
+    return apiClient<ValidateFilterResourcesResponse>({
+      path: "/webhooks/validate-filter-resources",
+      method: "POST",
+      headers: bearer(token),
+      body: JSON.stringify({ resourceIds }),
+      signal,
+    });
+  }, signal);
+}
+
+/**
+ * Preview which events would match a filter (optional backend feature)
+ * Does not send real events, only returns a prediction
+ */
+export async function previewFilterMatches(
+  token: string,
+  filter: WebhookEventFilter,
+  signal: AbortSignal
+): Promise<FilterPreviewResponse> {
+  return retryRead(async (signal) => {
+    return apiClient<FilterPreviewResponse>({
+      path: "/webhooks/preview-filter",
+      method: "POST",
+      headers: bearer(token),
+      body: JSON.stringify({ filter }),
       signal,
     });
   }, signal);

@@ -10,6 +10,7 @@
  */
 
 import { ApiNetworkError } from "./api-error";
+import { resolveRetryDelay } from "./retry-after";
 
 export type RetryConfig = {
   maxAttempts?: number;
@@ -68,11 +69,7 @@ export async function executeWithRetry<T>(
   request: RetryableRequest,
   config: RetryConfig = {},
 ): Promise<T> {
-  const {
-    maxAttempts = 3,
-    baseDelayMs = 500,
-    maxDelayMs = 30_000,
-  } = config;
+  const { maxAttempts = 3, baseDelayMs = 500, maxDelayMs = 30_000 } = config;
 
   let lastError: ApiNetworkError | undefined;
 
@@ -114,7 +111,10 @@ export async function executeWithRetry<T>(
         error.failure.type === "offline" ||
         error.failure.type === "timeout"
       ) {
-        if (!request.hasIdempotencyContract && request.method.toUpperCase() !== "GET") {
+        if (
+          !request.hasIdempotencyContract &&
+          request.method.toUpperCase() !== "GET"
+        ) {
           // Non-idempotent mutation; don't retry
           throw error;
         }
@@ -124,20 +124,21 @@ export async function executeWithRetry<T>(
         throw error;
       }
 
-      // Calculate exponential backoff with jitter
-      const exponentialDelay = baseDelayMs * Math.pow(2, attempt);
-      const jitter = exponentialDelay * (0.5 + Math.random() * 0.5);
-      const delay = Math.min(jitter, maxDelayMs);
+      // A 429/503's `Retry-After` header always caps/overrides the
+      // exponential-backoff-with-jitter fallback — see
+      // lib/network/retry-after.ts for why a server-provided limit must
+      // win over a client-side guess.
+      const { waitMs } = resolveRetryDelay(error.response, attempt, {
+        baseDelayMs,
+        maxDelayMs,
+      });
 
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
   }
 
   // This should not be reached
-  throw (
-    lastError ||
-    new Error("executeWithRetry: unreachable")
-  );
+  throw lastError || new Error("executeWithRetry: unreachable");
 }
 
 /**
@@ -177,6 +178,12 @@ export function getRecoveryAction(error: ApiNetworkError): {
   canRetry: boolean;
   message: string;
   action?: string;
+  /**
+   * Milliseconds until the server says it's safe to retry (from its
+   * `Retry-After` header), for a UI-level countdown. `null` when the
+   * response carried no such header.
+   */
+  retryAfterMs?: number | null;
 } {
   switch (error.failure.type) {
     case "offline":
@@ -193,12 +200,31 @@ export function getRecoveryAction(error: ApiNetworkError): {
         action: "Try again",
       };
 
-    case "server-error":
+    case "server-error": {
+      const retryAfterMs = error.retryAfterMs;
       return {
         canRetry: true,
-        message: "Server error. Please try again.",
+        message:
+          retryAfterMs !== null
+            ? `Server error. Please try again in ${Math.ceil(retryAfterMs / 1000)}s.`
+            : "Server error. Please try again.",
         action: "Retry",
+        retryAfterMs,
       };
+    }
+
+    case "rate-limited": {
+      const retryAfterMs = error.retryAfterMs;
+      return {
+        canRetry: true,
+        message:
+          retryAfterMs !== null
+            ? `Too many requests. Please try again in ${Math.ceil(retryAfterMs / 1000)}s.`
+            : "Too many requests. Please wait before trying again.",
+        action: "Retry",
+        retryAfterMs,
+      };
+    }
 
     case "auth-failure":
       return {

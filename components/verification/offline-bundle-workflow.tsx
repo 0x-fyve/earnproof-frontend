@@ -14,6 +14,7 @@
 
 import { useState } from "react";
 import { useNetworkStatus } from "@/lib/network";
+import { useAnnounce } from "@/lib/a11y/announcer-context";
 import {
   OFFLINE_BUNDLE_EXPORT_FILENAME,
   downloadTextFile,
@@ -76,6 +77,7 @@ export function OfflineBundleWorkflow({
 }: OfflineBundleWorkflowProps) {
   const network = useNetworkStatus();
   const online = isOnline ?? network.isOnline;
+  const { announce } = useAnnounce();
   const currentNow = () => now ?? new Date();
 
   const [request, setRequest] = useState<OfflineBundleRequest>({
@@ -126,6 +128,10 @@ export function OfflineBundleWorkflow({
       setRefreshResult(null);
       setVerifiedNonces([]);
       onBundleCreated?.(built);
+      // Generic by design: never interpolate the proof id, scopes, or
+      // digest into the announcement text, only a fixed status phrase
+      // (#252's "no secrets in announcements" acceptance criterion).
+      announce("Offline verification bundle prepared.", { source: "import" });
     })();
   };
 
@@ -137,6 +143,17 @@ export function OfflineBundleWorkflow({
         expectedDigest: bundle.digest.value,
       });
       setDigestStatus(status);
+      announce(
+        status.status === "verified"
+          ? "Integrity check passed."
+          : status.status === "mismatch"
+            ? "Integrity check failed: contents do not match the digest."
+            : "Integrity check unavailable in this browser.",
+        {
+          politeness: status.status === "mismatch" ? "assertive" : "polite",
+          source: "import",
+        },
+      );
     })();
   };
 
@@ -156,12 +173,20 @@ export function OfflineBundleWorkflow({
       if (verification.status === "verified-offline") {
         setVerifiedNonces((previous) => [...previous, bundle.nonce]);
       }
+      // verification.message is also a fixed, non-data-bearing phrase (see
+      // lib/credentials/offline-bundle.ts) — safe to announce directly.
+      announce(verification.message, {
+        politeness: verification.status === "verified-offline" ? "polite" : "assertive",
+        source: "import",
+      });
     })();
   };
 
   const handleRefresh = () => {
     if (!bundle) return;
-    setRefreshResult(refreshOfflineBundle({ bundle, isOnline: online, now: currentNow() }));
+    const refreshed = refreshOfflineBundle({ bundle, isOnline: online, now: currentNow() });
+    setRefreshResult(refreshed);
+    announce(refreshed.message, { source: "import" });
   };
 
   const handleDownload = () => {
