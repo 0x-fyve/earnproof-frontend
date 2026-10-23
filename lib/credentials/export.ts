@@ -3,6 +3,8 @@ export const VERIFICATION_LINK_EXPORT_FILENAME = "earnproof-verification-link.tx
 export const AUDIT_LOG_EXPORT_FILENAME = "earnproof-audit-log.json";
 /** Offline verification bundle (#294). */
 export const OFFLINE_BUNDLE_EXPORT_FILENAME = "earnproof-offline-bundle.json";
+/** Proof disclosure consent receipt (#226). */
+export const CONSENT_RECEIPT_EXPORT_FILENAME = "earnproof-consent-receipt.json";
 
 const UNSAFE_FILENAME_PATTERN =
   /G[A-Z0-9]{55}|0x[a-fA-F0-9]{8,}|ep[_-][A-Za-z0-9._:-]+|EP-[A-Za-z0-9._:-]+/i;
@@ -123,7 +125,8 @@ export function isSafeExportFilename(filename: string): boolean {
     filename !== CREDENTIAL_EXPORT_FILENAME &&
     filename !== VERIFICATION_LINK_EXPORT_FILENAME &&
     filename !== AUDIT_LOG_EXPORT_FILENAME &&
-    filename !== OFFLINE_BUNDLE_EXPORT_FILENAME
+    filename !== OFFLINE_BUNDLE_EXPORT_FILENAME &&
+    filename !== CONSENT_RECEIPT_EXPORT_FILENAME
   ) {
     return false;
   }
@@ -294,6 +297,45 @@ export function buildAuditLogExport(
       : ["id", "actor", "action", "resource", "occurredAt", "entryHash"],
     warnings,
     body: JSON.stringify(rows),
+    mimeType: "application/json",
+  };
+}
+
+/**
+ * Builds a downloadable export of an already-created consent receipt
+ * (#226). This never constructs a receipt itself — it only serializes
+ * one that `createConsentReceipt` already produced after approval — and
+ * never includes the raw credential or any field outside the receipt's
+ * own `approvedFields`, since the receipt object passed in was already
+ * constrained to that subset at creation time.
+ */
+export function buildConsentReceiptExport(receipt: {
+  receiptId: string;
+  requestId: string;
+  verifier: { commitment: string; displayName: string };
+  purpose: string;
+  approvedFields: string[];
+  expiresAt: string;
+  approvedAt: string;
+  proofId: string;
+  attestation: { signature: string; attestedAt: string } | null;
+}): ArtifactExportPlan {
+  return {
+    filename: CONSENT_RECEIPT_EXPORT_FILENAME,
+    includedFields: [
+      "receiptId",
+      "requestId",
+      "verifier.commitment",
+      "verifier.displayName",
+      "purpose",
+      "approvedFields",
+      "expiresAt",
+      "approvedAt",
+      "proofId",
+      "attestation",
+    ],
+    warnings: [],
+    body: JSON.stringify(receipt),
     mimeType: "application/json",
   };
 }

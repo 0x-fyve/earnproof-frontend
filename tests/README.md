@@ -75,8 +75,8 @@ function mockDetector(detect: (source: unknown) => Promise<Array<{ rawValue: str
 For a component that actually calls `@stellar/freighter-api` (i.e.
 anything downstream of `CreateProofFlow`'s wallet-connect step), see
 ["Mocking Freighter (unit-test level)"](../docs/testing-guide.md#mocking-freighter-unit-test-level)
-in the main testing guide — the short version is: seed
-`localStorage["earnproof.session"]` directly to skip past wallet-connect
+in the main testing guide — the short version is: seed the in-memory
+session with `storeSession()` from `@/lib/session` to skip past wallet-connect
 UI entirely for tests that only care about what happens *after*
 authentication, and reach for the Playwright `freighter` fixture
 (`e2e/fixtures/freighter-mock.ts`) for anything that needs to exercise

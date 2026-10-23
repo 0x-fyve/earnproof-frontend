@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { pageContainer } from "@/components/common/production-ui";
 import { PublicShell } from "@/components/layout/public-shell";
+import { StaleDeploymentRecovery } from "@/components/common/stale-deployment-recovery";
+import { isStaleChunkLoadError } from "@/lib/diagnostics/stale-deployment";
 
 interface ErrorPageProps {
   error: Error & { digest?: string };
@@ -11,11 +13,35 @@ interface ErrorPageProps {
 }
 
 export default function ErrorPage({ error, reset }: ErrorPageProps) {
+  // Starts true only for a recognized stale-chunk error ("disabled for
+  // unrelated runtime errors" — #227); StaleDeploymentRecovery itself can
+  // flip this back to false (via onFallbackToGenericError) if a reload
+  // was already attempted this session or the browser is offline, so one
+  // failed/blocked recovery always falls back to this standard boundary.
+  const [showStaleDeploymentRecovery, setShowStaleDeploymentRecovery] = useState(
+    () => isStaleChunkLoadError(error),
+  );
+
   useEffect(() => {
     // Log error to console for debugging in development
     // In production, you would typically send this to an error reporting service
     console.error("Global error boundary caught:", error);
   }, [error]);
+
+  if (showStaleDeploymentRecovery) {
+    return (
+      <PublicShell>
+        <div className={pageContainer}>
+          <div className="max-w-2xl mx-auto">
+            <StaleDeploymentRecovery
+              reset={reset}
+              onFallbackToGenericError={() => setShowStaleDeploymentRecovery(false)}
+            />
+          </div>
+        </div>
+      </PublicShell>
+    );
+  }
 
   return (
     <PublicShell>

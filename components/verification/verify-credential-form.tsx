@@ -18,6 +18,11 @@ import { VerifyResultSkeleton } from "@/components/common/skeleton/verify-result
 import { KeyLifecyclePanel } from "@/components/verification/key-lifecycle-panel";
 import { checkCredentialFile, parseCredentialJson } from "@/lib/validation/credential-import";
 import { discoverSigningKey } from "@/lib/key-lifecycle/registry";
+import {
+  extractImportedCredentialSummary,
+  type ImportedCredentialSummary,
+} from "@/lib/credentials/public-state-comparison";
+import { CredentialPublicStateComparison } from "@/components/verification/credential-public-state-comparison";
 
 import { defineMessages, formatMessage, formatNumber } from "@/lib/i18n";
 
@@ -37,6 +42,7 @@ export function VerifyCredentialForm() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [result, setResult] = useState<VerifyProofResponse | null>(null);
+  const [importedSummary, setImportedSummary] = useState<ImportedCredentialSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -147,6 +153,16 @@ export function VerifyCredentialForm() {
 
     const { id } = parsed;
 
+    // Extracted purely for the public-state comparison below (#225) — this
+    // never leaves the browser; only `id` is sent in the request path.
+    let importedCredentialJson: unknown = null;
+    try {
+      importedCredentialJson = JSON.parse(jsonInput.trim());
+    } catch {
+      importedCredentialJson = null;
+    }
+    setImportedSummary(extractImportedCredentialSummary(importedCredentialJson));
+
     setIsLoading(true);
     try {
       const response = await apiClient<VerifyProofResponse>({
@@ -164,6 +180,7 @@ export function VerifyCredentialForm() {
   function onCancel() {
     setJsonInput("");
     setResult(null);
+    setImportedSummary(null);
     setError(null);
     clearSelectedFile();
   }
@@ -314,6 +331,13 @@ export function VerifyCredentialForm() {
       </form>
 
       {isLoading ? <VerifyResultSkeleton /> : <VerificationPanel result={result} />}
+      {!isLoading && result && (
+        <CredentialPublicStateComparison
+          imported={importedSummary}
+          response={result}
+          signatureResult={result.result}
+        />
+      )}
       {!isLoading && result?.proof && (
         <KeyLifecyclePanel outcome={discoverSigningKey(result.proof.type)} />
       )}

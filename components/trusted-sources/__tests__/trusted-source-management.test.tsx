@@ -1,19 +1,16 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { TrustedSourceManagement } from "../trusted-source-management";
 import { getIssuers } from "@/lib/api/issuers";
+import { storeSession } from "@/lib/session";
 
 jest.mock("@/lib/api/issuers", () => ({
   getIssuers: jest.fn(),
 }));
 const mockGetIssuers = getIssuers as jest.MockedFunction<typeof getIssuers>;
 
-const SESSION_KEY = "earnproof.session";
 
 function setSession(role: string, userId = "user-1") {
-  window.localStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify({ token: "tok", user: { id: userId, role } }),
-  );
+  storeSession({ token: "tok", user: { id: userId, role } });
 }
 
 beforeEach(() => {

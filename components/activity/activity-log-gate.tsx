@@ -9,7 +9,8 @@ import { ActivityLog } from "@/components/activity/activity-log";
  * #194 — see `lib/api/capabilities.ts` for why this is a UX-only gate,
  * never a security boundary. The server-side scoping/redaction
  * `lib/api/activity.ts` documents is what actually protects this data;
- * this gate only decides whether to *offer* the page at all.
+ * this gate only decides whether to *offer* the page at all. The log itself
+ * still handles 401/403/404 from the live endpoint on its own.
  */
 function GatedActivityLog() {
   const { enabled, status } = useCapability("activity-log");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { formatApiKeyPrefix, rotateApiKey, revokeApiKey } from "@/lib/api/keys";
+import { formatApiKeyPrefix, hasKnownCreationDate, rotateApiKey, revokeApiKey } from "@/lib/api/keys";
 import { getExpirationStatus, isApiKeyValid } from "@/lib/api/api-key-expiration";
 import { Redacted } from "@/components/common/redacted";
 import { ConfirmationDialog } from "@/components/common/confirmation-dialog";
@@ -10,7 +10,9 @@ import { ResultsHeading } from "@/components/common/results-heading";
 import { RecentAuthGate } from "@/components/common/recent-auth-gate";
 import { OneTimeSecret } from "./one-time-secret";
 import { KeyOverlapRotationDialog } from "./key-overlap-rotation";
+import { KeyActivityDetailView } from "./key-activity-detail";
 import { formatDate, formatMessage, formatRelativeTime } from "@/lib/i18n";
+import { formatDateTimeWithZone } from "@/lib/i18n/format";
 import { useRecentAuth } from "@/lib/auth/recent-auth";
 import { signWithFreighter } from "@/lib/wallet/sign-message";
 import type { ApiKey } from "@/lib/api/generated/v1";
@@ -306,6 +308,7 @@ function ApiKeyRow({
   onOverlapRotate?: () => void;
 }) {
   const expirationStatus = getExpirationStatus(apiKey.expiresAt);
+  const [activityExpanded, setActivityExpanded] = useState(false);
 
   const formatOptionalDate = (dateString: string | null | undefined) => {
     if (!dateString) return "Never";
@@ -376,8 +379,9 @@ function ApiKeyRow({
 
   return (
     <div
-      className={`grid gap-3 rounded-md border p-4 text-sm md:grid-cols-[1.5fr_1fr_1fr_1fr_auto] md:items-center md:gap-4 transition ${getExpirationBgColor()} ${getExpirationBorderColor()}`}
+      className={`grid gap-3 rounded-md border p-4 text-sm transition ${getExpirationBgColor()} ${getExpirationBorderColor()}`}
     >
+    <div className="grid gap-3 md:grid-cols-[1.5fr_1fr_1fr_1fr_auto] md:items-center md:gap-4">
       {/* Name & Prefix */}
       <div className="min-w-0">
         <div className="font-medium text-white">{apiKey.name}</div>
@@ -410,8 +414,13 @@ function ApiKeyRow({
       <div>
         <div className="text-slate-300 md:hidden font-semibold">Created:</div>
         <div className="text-slate-400">
-          {/* Using a placeholder date since it's not in the API response */}
-          Recently
+          {hasKnownCreationDate(apiKey) ? (
+            formatDateTimeWithZone(apiKey.createdAt as string)
+          ) : (
+            <span className="italic" title="This key was created before creation timestamps were tracked.">
+              Unavailable
+            </span>
+          )}
         </div>
       </div>
 
@@ -429,6 +438,14 @@ function ApiKeyRow({
 
       {/* Actions */}
       <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => setActivityExpanded((expanded) => !expanded)}
+          className="h-8 rounded border border-white/15 px-3 text-xs font-medium text-white hover:bg-white/5 transition"
+          aria-expanded={activityExpanded}
+          aria-label={`${activityExpanded ? "Hide" : "Show"} activity for API key ${apiKey.name}`}
+        >
+          {activityExpanded ? "Hide activity" : "Activity"}
+        </button>
         <button
           onClick={onRotate}
           disabled={isLoading}
@@ -456,6 +473,9 @@ function ApiKeyRow({
           {isLoading ? "..." : "Revoke"}
         </button>
       </div>
+    </div>
+
+      {activityExpanded ? <KeyActivityDetailView keyId={apiKey.id} /> : null}
     </div>
   );
 }

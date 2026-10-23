@@ -6,6 +6,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { OrganizationMembers } from "../organization-members";
 import { apiClient } from "@/lib/api/client";
+import { storeSession, clearStoredSession } from "@/lib/session";
 
 jest.mock("@/lib/api/client", () => ({
   apiClient: jest.fn(),
@@ -16,7 +17,6 @@ jest.mock("@/lib/api/client", () => ({
 
 const mockedApiClient = apiClient as jest.MockedFunction<typeof apiClient>;
 
-const SESSION_KEY = "earnproof.session";
 const VIEWER_WALLET = "GVIEWER000000000000000000000000000000000000000000000AA";
 const OTHER_WALLET = "GOTHER0000000000000000000000000000000000000000000000BB";
 
@@ -39,13 +39,10 @@ const REGULAR_MEMBER = {
 };
 
 function setSession(walletAddress = VIEWER_WALLET) {
-  window.localStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify({
+  storeSession({
       token: "test-token",
       user: { id: "user-owner", walletAddress, role: "ADMIN" },
-    })
-  );
+    });
 }
 
 describe("OrganizationMembers", () => {
@@ -55,7 +52,7 @@ describe("OrganizationMembers", () => {
   });
 
   afterEach(() => {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession();
   });
 
   it("renders the member list on successful load", async () => {

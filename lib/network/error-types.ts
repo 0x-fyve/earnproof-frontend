@@ -4,7 +4,8 @@
  * Distinguishes between:
  * - offline: no network connectivity
  * - server-error: 5xx responses
- * - validation-error: 4xx client input errors (not 401/403)
+ * - rate-limited: 429 Too Many Requests
+ * - validation-error: 4xx client input errors (not 401/403/429)
  * - auth-failure: 401/403 authorization failures
  * - timeout: request exceeded time limit
  * - cancelled: request was aborted by caller
@@ -15,6 +16,7 @@
 export type NetworkFailureType =
   | "offline"
   | "server-error"
+  | "rate-limited"
   | "validation-error"
   | "auth-failure"
   | "timeout"
@@ -91,7 +93,20 @@ export function classifyNetworkFailure(
       };
     }
 
-    // Validation errors (4xx except 401/403)
+    // Rate limiting: retryable on its own schedule (the server's own
+    // Retry-After header — see lib/network/retry-after.ts — not the
+    // client's guess), unlike every other 4xx below.
+    if (status === 429) {
+      return {
+        type: "rate-limited",
+        message: "Too many requests. Please wait before trying again.",
+        statusCode: status,
+        originalError: error,
+        retryable: true,
+      };
+    }
+
+    // Validation errors (4xx except 401/403/429)
     if (status >= 400) {
       return {
         type: "validation-error",
@@ -131,8 +146,19 @@ export function canRetry(
   failure: NetworkFailure,
   isIdempotent: boolean,
 ): boolean {
-  // Offline and server errors are retryable in principle
-  if (failure.type === "offline" || failure.type === "server-error") {
+  // Offline, server errors, and rate limiting are retryable in principle,
+  // regardless of idempotency — matching this function's existing
+  // contract for offline/server-error (see error-types.test.ts). The
+  // separate non-idempotent-mutation gate lives in
+  // lib/network/retry-orchestrator.ts's `isMutationSafeToRetry`, which
+  // callers combine with this: a 429 means "slow down", not "this
+  // specific write is safe to repeat", so a non-idempotent mutation still
+  // does not auto-retry just because this returns true.
+  if (
+    failure.type === "offline" ||
+    failure.type === "server-error" ||
+    failure.type === "rate-limited"
+  ) {
     return true;
   }
 

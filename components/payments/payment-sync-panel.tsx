@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { classifySyncOutcome, syncPayments, type PaymentSyncOutcome } from "@/lib/api/payments";
 import type { PaymentSyncResult } from "@/lib/api/generated/v1";
-
-const SESSION_KEY = "earnproof.session";
+import { readStoredSession } from "@/lib/session";
+import { useAnnounce } from "@/lib/a11y/announcer-context";
+import { useIdempotentOperation } from "@/lib/proofs/use-idempotent-operation";
+import { OperationRecoveryPanel } from "@/components/common/operation-recovery-panel";
 
 type SessionData = {
   token: string;
@@ -13,24 +15,6 @@ type SessionData = {
     role: string;
   };
 };
-
-function readStoredSession(): SessionData | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const stored = window.localStorage.getItem(SESSION_KEY);
-  if (!stored) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(stored) as SessionData;
-  } catch {
-    window.localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-}
 
 type SyncPhase = "idle" | "syncing" | "succeeded" | "failed";
 
@@ -67,12 +51,21 @@ const outcomeCopy: Record<PaymentSyncOutcome, { label: string; tone: string }> =
 export function PaymentSyncPanel() {
   const [session] = useState<SessionData | null>(() => readStoredSession());
   const [state, setState] = useState<SyncState>(INITIAL_STATE);
+  const { announce } = useAnnounce();
   // Guards against duplicate concurrent requests from rapid repeated
   // clicks; `state.phase === "syncing"` alone is not enough because the
   // state update from the first click may not have committed yet when a
   // second click handler runs in the same tick.
   const inFlightRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // #254: a persisted idempotency key + recovery record for this sync
+  // attempt, scoped to the authenticated user. There is no per-sync
+  // "intent" variation (unlike proof creation's selection/threshold/period)
+  // — every sync for a given user is the same logical intent — so the
+  // operation key naturally stays stable across retries of a stuck sync,
+  // and a brand-new intent only starts once `operation.reset()` runs after
+  // a confirmed success.
+  const operation = useIdempotentOperation(session?.user.id ?? "anonymous", "payment-sync");
 
   const runSync = useCallback(async () => {
     if (!session || inFlightRef.current) {
@@ -84,30 +77,68 @@ export function PaymentSyncPanel() {
     abortControllerRef.current = controller;
 
     setState((prev) => ({ ...prev, phase: "syncing", error: null }));
+    announce("Payment sync started.", { source: "payment-sync" });
+
+    const record = operation.begin({});
 
     try {
-      const result = await syncPayments(session.token, controller.signal);
+      const result = await syncPayments(session.token, controller.signal, record.idempotencyKey);
       if (controller.signal.aborted) return;
 
+      const outcome = classifySyncOutcome(result);
       setState(() => ({
         phase: "succeeded",
         result,
-        outcome: classifySyncOutcome(result),
+        outcome,
         error: null,
         lastSuccess: result,
       }));
+      announce(outcomeCopy[outcome].label, { source: "payment-sync" });
+      operation.markSucceeded();
+      operation.reset();
     } catch (err) {
       if (controller.signal.aborted) return;
 
+      // Same timeout-vs-observed-failure distinction as
+      // create-proof-flow.tsx's submitProof: an aborted request (client
+      // timeout) means the server may have already accepted the sync, so
+      // the recovery panel (poll, don't guess) is offered; any other error
+      // is a real, observed failure.
+      const isAbort = err instanceof DOMException && err.name === "AbortError";
+      const message = isAbort
+        ? "Payment sync timed out. We can't confirm whether it completed."
+        : err instanceof Error
+          ? err.message
+          : "Payment sync failed. Please try again.";
       setState((prev) => ({
         ...prev,
         phase: "failed",
-        error: err instanceof Error ? err.message : "Payment sync failed. Please try again.",
+        error: message,
       }));
+      announce(message, { politeness: "assertive", source: "payment-sync" });
+      if (!isAbort) {
+        operation.markFailed();
+      }
     } finally {
       inFlightRef.current = false;
     }
-  }, [session]);
+  }, [announce, operation, session]);
+
+  const resumeSyncOperation = useCallback(async () => {
+    if (!session) return;
+    await operation.resume(session.token);
+  }, [operation, session]);
+
+  // Cancellation (unmount mid-sync, e.g. a route change navigating away):
+  // the in-flight request is aborted above via abortControllerRef's cleanup
+  // on unmount, but the status announcement must not linger after the user
+  // has left — clear this flow's own message so it can't be confused with a
+  // stale "in progress" read-out on whatever the user navigates to next.
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   if (!session) {
     return (
@@ -142,13 +173,17 @@ export function PaymentSyncPanel() {
         </button>
       </div>
 
-      {/* A single aria-live="polite" region wrapping whichever status panel
-          is visible: screen readers announce it on every phase change
-          without moving focus off whatever the operator was doing (#138:
-          "do not steal focus"). Kept as one region (rather than a
-          separate sr-only duplicate of the same text) so there is exactly
-          one accessible name for "the sync status", not two competing
-          copies of it. */}
+      {/* This panel keeps its own visible aria-live="polite" region (relied
+          on by its existing tests) in addition to calling the shared
+          coordinator's announce() above (#252). The two are not a
+          duplicate announcement in practice: this region's accessible name
+          and content track the *visible* status panel the sighted user
+          already sees inline, while the coordinator's off-screen regions in
+          app/layout.tsx are the single place every flow in the app reports
+          to, so a screen-reader user gets one coherent, ordered, deduped
+          stream across flows instead of n independent per-component ones.
+          A future pass may remove this local region once every consumer of
+          "the sync status" has migrated to reading only the shared one. */}
       <div aria-live="polite" role="status">
         {isSyncing && (
           <div className="flex items-center gap-3 rounded-md border border-cyan-300/30 bg-cyan-300/10 p-3 text-sm text-cyan-100">
@@ -191,6 +226,27 @@ export function PaymentSyncPanel() {
                 {state.lastSuccess.updated ?? 0} updated, {state.lastSuccess.skipped ?? 0} skipped.
               </p>
             )}
+          </div>
+        )}
+
+        {/* Not shown while isSyncing: this panel's own role="status" would
+            otherwise coexist with the "Sync in progress..." status region
+            above inside the same aria-live="polite" container, giving two
+            role="status" elements at once (ambiguous for getByRole("status")
+            callers, and a confusing double status read-out for screen reader
+            users). Once an attempt resolves to a non-"succeeded" terminal
+            state, the in-progress region above stops rendering and this one
+            takes its place instead of overlapping it. */}
+        {!isSyncing && operation.record && operation.outcome && operation.outcome !== "succeeded" && (
+          <div className="mt-3">
+            <OperationRecoveryPanel
+              disableRetry={isSyncing}
+              idempotencyKey={operation.record.idempotencyKey}
+              isPolling={operation.isPolling}
+              onResume={resumeSyncOperation}
+              onRetry={runSync}
+              outcome={operation.outcome}
+            />
           </div>
         )}
       </div>

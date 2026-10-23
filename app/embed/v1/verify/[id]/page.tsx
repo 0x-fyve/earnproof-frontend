@@ -9,6 +9,18 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+// #332: explicitly public, same as the rest of /verify — embedding on a
+// relying-party page by design is exactly why it must stay reachable
+// without authentication. Declared here instead of inherited so the
+// embed exception stays visible and auditable at this exact route rather
+// than relying on the app-root default.
+export const routeAuth = {
+  access: "public",
+  role: null,
+  capability: null,
+  cache: "no-store",
+};
+
 // This is the one route family that carries the narrowly-scoped
 // `frame-ancestors *` CSP exception (see `config/security-headers.ts`'s
 // `allowEmbedding` option and `proxy.ts`). Every other route in this app

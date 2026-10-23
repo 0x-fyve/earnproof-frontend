@@ -21,6 +21,7 @@ export function BatchProofWorkspace() {
   const [items, setItems] = useState<BatchProofItem[]>([]);
   const [isVerifying, setIsVerifying] = useState(false);
   const [batchError, setBatchError] = useState<string | null>(null);
+  const [showSummary, setShowSummary] = useState(false);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const cancelledRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -101,17 +102,31 @@ export function BatchProofWorkspace() {
 
   async function verifyAll() {
     setBatchError(null);
+    setShowSummary(false);
     cancelledRef.current = false;
     setIsVerifying(true);
 
-    const pending = items.filter((item) => item.status === "pending");
+    // Defense in depth: parseBatchProofInput already caps a single preview
+    // at MAX_BATCH_ITEMS, but the batch limit must still be enforced here,
+    // at submission time, not only when the preview was first built
+    // (#324's "batch limits must be enforced before and after submission"),
+    // in case `items` is ever extended past the cap some other way.
+    const pending = items.filter((item) => item.status === "pending").slice(0, MAX_BATCH_ITEMS);
     await Promise.all(pending.map((item) => verifyItem(item)));
 
+    // A cancelled run already shows each item's own "Cancelled" status; a
+    // summary on top of that would misleadingly describe a run that never
+    // finished, so it's suppressed here rather than in the render (#324's
+    // "partial failures must never be summarized as complete success").
+    if (!cancelledRef.current) {
+      setShowSummary(true);
+    }
     setIsVerifying(false);
   }
 
   function cancelAll() {
     cancelledRef.current = true;
+    setShowSummary(false);
     for (const controller of abortControllersRef.current.values()) {
       controller.abort();
     }
@@ -126,6 +141,13 @@ export function BatchProofWorkspace() {
     setItems([]);
     setRawInput("");
     setBatchError(null);
+    setShowSummary(false);
+  }
+
+  /** Re-queues every failed item as pending so verifyAll() picks it back up, without touching already-verified or still-invalid rows. */
+  function retryFailed() {
+    setShowSummary(false);
+    setItems((prev) => prev.map((item) => (item.status === "failed" ? { ...item, status: "pending" } : item)));
   }
 
   function exportResults() {
@@ -146,6 +168,9 @@ export function BatchProofWorkspace() {
 
   const canVerify = items.some((item) => item.status === "pending") && !isVerifying;
   const hasVerifiedResults = items.some((item) => item.status === "verified");
+  const failedCount = items.filter((item) => item.status === "failed").length;
+  const verifiedCount = items.filter((item) => item.status === "verified").length;
+  const hasFailedItems = failedCount > 0;
 
   return (
     <div className="grid gap-6">
@@ -244,11 +269,42 @@ export function BatchProofWorkspace() {
             </div>
           </div>
 
+          {showSummary && (
+            <div
+              className={`rounded-md border p-3 text-sm ${
+                hasFailedItems
+                  ? "border-amber-300/30 bg-amber-300/10 text-amber-200"
+                  : "border-emerald-300/30 bg-emerald-300/10 text-emerald-200"
+              }`}
+              role="status"
+              aria-live="polite"
+            >
+              {hasFailedItems ? (
+                <>
+                  Batch finished with errors: {verifiedCount} verified, {failedCount} failed. No
+                  result is complete until every item has been retried or acknowledged.
+                </>
+              ) : (
+                <>Batch finished: all {verifiedCount} item{verifiedCount === 1 ? "" : "s"} verified successfully.</>
+              )}
+            </div>
+          )}
+
           <ul className="grid gap-2" aria-label="Batch proof verification results">
             {items.map((item) => (
               <BatchProofRow key={item.key} item={item} />
             ))}
           </ul>
+
+          {hasFailedItems && !isVerifying && (
+            <button
+              type="button"
+              onClick={retryFailed}
+              className="h-9 w-fit rounded-md border border-amber-300/30 px-3 text-xs font-semibold text-amber-200 hover:bg-amber-300/10"
+            >
+              Retry {failedCount} failed item{failedCount === 1 ? "" : "s"}
+            </button>
+          )}
         </section>
       )}
     </div>

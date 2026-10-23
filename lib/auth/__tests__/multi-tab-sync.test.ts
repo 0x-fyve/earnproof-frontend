@@ -1,263 +1,115 @@
 /**
- * Tests for MultiTabSync:
- * - Multi-tab sync via BroadcastChannel
- * - No sensitive data in messages
- * - Listener subscription and notification
+ * @jest-environment jsdom
  */
 
-import { MultiTabSync } from '../multi-tab-sync';
+/**
+ * MultiTabSync is now a deprecated compatibility adapter over the tab-sync
+ * coordinator (#274). These tests pin the documented legacy mapping:
+ * downgrades only, nothing that could signal a session became valid.
+ */
 
-describe('MultiTabSync', () => {
+import { MultiTabSync, type SyncMessage } from "../multi-tab-sync";
+import { createTabSyncCoordinator, resetTabSyncCoordinatorForTests, type TabSyncEvent } from "../tab-sync-coordinator";
+import { TAB_B, installFakeBroadcastChannel, uninstallBroadcastChannel } from "@/tests/fixtures/tab-sync-fixtures";
+
+function otherTab() {
+  const coordinator = createTabSyncCoordinator({ tabId: TAB_B });
+  const received: TabSyncEvent[] = [];
+  coordinator.subscribe((event) => received.push(event));
+  return { coordinator, received };
+}
+
+describe("MultiTabSync (compatibility adapter)", () => {
   beforeEach(() => {
+    installFakeBroadcastChannel();
     MultiTabSync.reset();
+    resetTabSyncCoordinatorForTests();
   });
 
   afterEach(() => {
     MultiTabSync.reset();
+    resetTabSyncCoordinatorForTests();
+    uninstallBroadcastChannel();
   });
 
-  describe('broadcast channel communication', () => {
-    it('should initialize BroadcastChannel', () => {
-      const sync = MultiTabSync.getInstance();
-      expect(sync).toBeDefined();
-      expect(sync.getTabId()).toBeDefined();
-    });
-
-    it('should generate unique tab IDs', () => {
-      const sync1 = MultiTabSync.getInstance();
-      const id1 = sync1.getTabId();
-
-      MultiTabSync.reset();
-
-      const sync2 = MultiTabSync.getInstance();
-      const id2 = sync2.getTabId();
-
-      expect(id1).not.toBe(id2);
-    });
-
-    it('should broadcast logout message', (done) => {
-      const sync = MultiTabSync.getInstance();
-
-      sync.onSync((message) => {
-        expect(message.type).toBe('logout');
-        expect(message.sourceTabId).toBe(sync.getTabId());
-        expect(message.timestamp).toBeGreaterThan(0);
-        done();
-      });
-
-      sync.broadcast('logout');
-    });
-
-    it('should broadcast session_expired message', (done) => {
-      const sync = MultiTabSync.getInstance();
-
-      sync.onSync((message) => {
-        expect(message.type).toBe('session_expired');
-        done();
-      });
-
-      sync.broadcast('session_expired');
-    });
-
-    it('should broadcast token_rotated message', (done) => {
-      const sync = MultiTabSync.getInstance();
-
-      sync.onSync((message) => {
-        expect(message.type).toBe('token_rotated');
-        done();
-      });
-
-      sync.broadcast('token_rotated');
-    });
-
-    it('should broadcast wallet_changed message', (done) => {
-      const sync = MultiTabSync.getInstance();
-
-      sync.onSync((message) => {
-        expect(message.type).toBe('wallet_changed');
-        done();
-      });
-
-      sync.broadcast('wallet_changed');
-    });
-
-    it('should NOT include sensitive data in messages', (done) => {
-      const sync = MultiTabSync.getInstance();
-
-      sync.onSync((message) => {
-        // Message should only have: type, timestamp, sourceTabId
-        const keys = Object.keys(message);
-        expect(keys).toEqual(['type', 'timestamp', 'sourceTabId']);
-
-        // No token, address, or other sensitive data
-        expect((message as any).token).toBeUndefined();
-        expect((message as any).walletAddress).toBeUndefined();
-        expect((message as any).user).toBeUndefined();
-
-        done();
-      });
-
-      sync.broadcast('logout');
-    });
+  it("keeps the singleton API", () => {
+    const first = MultiTabSync.getInstance();
+    expect(MultiTabSync.getInstance()).toBe(first);
+    MultiTabSync.reset();
+    expect(MultiTabSync.getInstance()).not.toBe(first);
   });
 
-  describe('listener subscription', () => {
-    it('should notify listeners on sync message', (done) => {
-      const sync = MultiTabSync.getInstance();
-      let callCount = 0;
-
-      sync.onSync((message) => {
-        callCount++;
-        if (callCount === 1) {
-          done();
-        }
-      });
-
-      sync.broadcast('logout');
-    });
-
-    it('should handle multiple listeners', (done) => {
-      const sync = MultiTabSync.getInstance();
-      const calls: number[] = [];
-
-      sync.onSync(() => calls.push(1));
-      sync.onSync(() => calls.push(2));
-
-      sync.broadcast('logout');
-
-      setTimeout(() => {
-        expect(calls.length).toBeGreaterThanOrEqual(2);
-        done();
-      }, 50);
-    });
-
-    it('should allow unsubscription', (done) => {
-      const sync = MultiTabSync.getInstance();
-      const calls: number[] = [];
-
-      const unsubscribe = sync.onSync(() => calls.push(1));
-
-      sync.broadcast('logout');
-
-      setTimeout(() => {
-        const callsAfterFirst = calls.length;
-        unsubscribe();
-
-        sync.broadcast('session_expired');
-
-        setTimeout(() => {
-          expect(calls.length).toBe(callsAfterFirst);
-          done();
-        }, 50);
-      }, 50);
-    });
-
-    it('should not crash if listener throws', (done) => {
-      const sync = MultiTabSync.getInstance();
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-
-      sync.onSync(() => {
-        throw new Error('Listener error');
-      });
-
-      sync.onSync(() => {
-        // This should still be called
-        expect(consoleErrorSpy).toHaveBeenCalled();
-        consoleErrorSpy.mockRestore();
-        done();
-      });
-
-      sync.broadcast('logout');
-    });
+  it("exposes the shared coordinator's tab id", () => {
+    expect(MultiTabSync.getInstance().getTabId()).toMatch(/^[a-f0-9]{32}$/);
   });
 
-  describe('cross-tab filtering', () => {
-    it('should filter out messages from same tab', (done) => {
-      const sync = MultiTabSync.getInstance();
-      const tabId = sync.getTabId();
-
-      const listener = jest.fn();
-      sync.onSync(listener);
-
-      sync.broadcast('logout');
-
-      // Message from same tab should be filtered
-      setTimeout(() => {
-        expect(listener).not.toHaveBeenCalled();
-        done();
-      }, 50);
-    });
+  it.each([
+    ["logout", "wallet_logout"],
+    ["wallet_changed", "wallet_logout"],
+    ["session_expired", "session_revoked"],
+  ] as const)("maps broadcast(%s) to the %s downgrade", (legacy, expected) => {
+    const { coordinator, received } = otherTab();
+    MultiTabSync.getInstance().broadcast(legacy);
+    expect(received.map((event) => event.type)).toEqual([expected]);
+    coordinator.close();
   });
 
-  describe('error handling', () => {
-    it('should gracefully handle broadcast errors', () => {
-      const sync = MultiTabSync.getInstance();
+  it.each(["token_rotated", "session_recovered"] as const)(
+    "authorization: no longer transmits %s (it could imply a session became valid)",
+    (legacy) => {
+      const { coordinator, received } = otherTab();
+      MultiTabSync.getInstance().broadcast(legacy);
+      expect(received).toEqual([]);
+      coordinator.close();
+    },
+  );
 
-      // Try to broadcast even if channel might not be available
-      expect(() => sync.broadcast('logout')).not.toThrow();
-    });
+  it("delivers downgrades from other tabs to legacy listeners in the legacy shape", () => {
+    const { coordinator } = otherTab();
+    const messages: SyncMessage[] = [];
+    MultiTabSync.getInstance().onSync((message) => messages.push(message));
 
-    it('should gracefully handle malformed messages', (done) => {
-      const sync = MultiTabSync.getInstance();
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+    coordinator.publish("wallet_logout");
+    coordinator.publish("session_revoked");
 
-      sync.onSync(() => {
-        // Should not crash on malformed message
-      });
-
-      try {
-        // Simulate malformed message delivery
-        sync.broadcast('logout');
-      } catch {
-        // OK to fail
-      }
-
-      setTimeout(() => {
-        consoleErrorSpy.mockRestore();
-        done();
-      }, 50);
-    });
+    expect(messages.map((message) => message.type)).toEqual(["logout", "session_expired"]);
+    expect(Object.keys(messages[0]).sort()).toEqual(["sourceTabId", "timestamp", "type"]);
+    expect(messages[0].sourceTabId).toBe(TAB_B);
+    coordinator.close();
   });
 
-  describe('lifecycle', () => {
-    it('should cleanup on destroy', () => {
-      const sync = MultiTabSync.getInstance();
-      const unsub = sync.onSync(() => {});
+  it("does not forward tenant or recent-auth events to legacy listeners", () => {
+    const { coordinator } = otherTab();
+    const listener = jest.fn();
+    MultiTabSync.getInstance().onSync(listener);
 
-      sync.destroy();
+    coordinator.publish("tenant_switched");
+    coordinator.publish("recent_auth_expired");
 
-      // After destroy, channel should be closed
-      expect(() => sync.broadcast('logout')).not.toThrow();
-
-      unsub();
-    });
-
-    it('should reset singleton', () => {
-      const sync1 = MultiTabSync.getInstance();
-      const id1 = sync1.getTabId();
-
-      MultiTabSync.reset();
-
-      const sync2 = MultiTabSync.getInstance();
-      const id2 = sync2.getTabId();
-
-      expect(id1).not.toBe(id2);
-      expect(sync1).not.toBe(sync2);
-    });
+    expect(listener).not.toHaveBeenCalled();
+    coordinator.close();
   });
 
-  describe('message timestamps', () => {
-    it('should include accurate timestamps', (done) => {
-      const sync = MultiTabSync.getInstance();
-      const beforeBroadcast = Date.now();
+  it("never delivers this tab's own broadcasts back to it", () => {
+    const listener = jest.fn();
+    const sync = MultiTabSync.getInstance();
+    sync.onSync(listener);
+    sync.broadcast("logout");
+    expect(listener).not.toHaveBeenCalled();
+  });
 
-      sync.onSync((message) => {
-        expect(message.timestamp).toBeGreaterThanOrEqual(beforeBroadcast);
-        expect(message.timestamp).toBeLessThanOrEqual(Date.now() + 100);
-        done();
-      });
+  it("unsubscribe and destroy() stop delivery", () => {
+    const { coordinator } = otherTab();
+    const sync = MultiTabSync.getInstance();
+    const unsubscribed = jest.fn();
+    const destroyed = jest.fn();
+    sync.onSync(unsubscribed)();
+    sync.onSync(destroyed);
+    sync.destroy();
 
-      sync.broadcast('logout');
-    });
+    coordinator.publish("wallet_logout");
+    expect(unsubscribed).not.toHaveBeenCalled();
+    expect(destroyed).not.toHaveBeenCalled();
+    coordinator.close();
   });
 });

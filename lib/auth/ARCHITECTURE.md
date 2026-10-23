@@ -178,36 +178,35 @@ detector.destroy();
 - Broadcasts `wallet_changed` message to other tabs
 - Components re-fetch wallet-specific data
 
-### 4. MultiTabSync (Cross-Tab Synchronization)
+### 4. Cross-tab sync (TabSyncCoordinator; MultiTabSync is a deprecated adapter)
 
-**Purpose**: Sync session state changes across browser tabs
+**Purpose**: Propagate wallet logout, session revocation, recent-auth expiry
+and tenant switches to every open same-origin tab (#274). Full reference:
+[docs/cross-tab-sync.md](../../docs/cross-tab-sync.md).
 
 **Key Features**:
-- Uses BroadcastChannel API (fallback: none in older browsers)
-- Never transmits sensitive data (token, address)
-- Deduplicates messages (ignores own tab's messages)
-- Async listener support
-
-**Message Types**:
-- `logout` - User logged out
-- `session_expired` - Session expired
-- `token_rotated` - Token was refreshed
-- `wallet_changed` - Wallet account/network changed
-- `session_recovered` - Recovery succeeded
+- BroadcastChannel, with a `storage`-event fallback on a dedicated key
+- Versioned message `{ v, type, epoch, tabId, tenantId?, ts }`, validated on
+  receipt; malformed, oversized (> 256 bytes), unknown-version,
+  unknown-type and extra-field (e.g. token-bearing) messages are dropped
+- Downgrade-only: no message can authenticate a tab or grant a role
+- Hybrid logical clock epochs; replays ignored; concurrent events resolved
+  most-restrictive-first (revocation > logout > recent-auth expiry >
+  tenant switch), then by tabId
+- Publish dedupe (500 ms) and rate limit (5/s); inbound cap (20/s)
+- Transport closed on `pagehide`, reopened on bfcache `pageshow`
 
 **API**:
 ```typescript
-sync.broadcast(messageType);
-sync.onSync((message) => { /* react */ });
-sync.getTabId();
-sync.destroy();
+const sync = getTabSyncCoordinator(); // null during SSR
+sync?.publish('tenant_switched', { tenantId }); // -> 'sent' | 'deduplicated' | 'rate_limited' | ...
+const unsubscribe = sync?.subscribe((event) => { /* downgrade only */ });
 ```
 
-**Security**:
-- Messages contain: type, timestamp, sourceTabId only
-- No token, address, user data transmitted
-- Each message timestamped (can detect stale messages)
-- Source tab ID allows filtering own messages
+`MultiTabSync` keeps its old API as an adapter: `broadcast('logout' |
+'wallet_changed')` sends `wallet_logout`, `broadcast('session_expired')`
+sends `session_revoked`, and `token_rotated` / `session_recovered` are no
+longer transmitted.
 
 ### 5. AuthSessionProvider (Centralized State)
 
@@ -325,9 +324,10 @@ Unmount
 ✅ Defaults to `/` on validation failure  
 
 ### Multi-Tab Safety
-✅ Session state synced across tabs  
-✅ No sensitive data in BroadcastChannel messages  
-✅ Logout in one tab immediately reflects in all tabs  
+✅ Logout, revocation, recent-auth expiry and tenant switches synced across tabs  
+✅ Schema-validated, token-free messages; extra fields rejected  
+✅ Received messages can only downgrade; tenant access re-checked with the server  
+✅ Deterministic conflict order and replay protection (see docs/cross-tab-sync.md)  
 
 ## Testing Strategy
 
@@ -335,7 +335,8 @@ Unmount
 - SessionCoordinator: concurrent 401s, recovery retry, cleanup
 - TokenManager: storage, rotation, expiry, listeners
 - WalletDetector: account changes, network changes, polling
-- MultiTabSync: broadcast, listeners, tab filtering
+- Tab sync protocol/coordinator: validation, replay, concurrency, bounds, storage fallback
+- MultiTabSync adapter: legacy mapping (downgrades only)
 
 ### Integration Tests
 - End-to-end auth flows (login, logout, wallet change)
@@ -346,7 +347,7 @@ Unmount
 - Full build validation (`npm run build`)
 - Linting (`npm run lint`)
 - Real Freighter wallet integration
-- Actual BroadcastChannel in test environment
+- Actual BroadcastChannel in test environment (tests use an in-memory fake and a two-window storage fake)
 
 ## Migration Guide
 

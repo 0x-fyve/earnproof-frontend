@@ -14,6 +14,8 @@ import { apiClient, bearer } from "@/lib/api/client";
 import { buildCredentialExport, buildVerificationLinkExport } from "@/lib/credentials/export";
 import { resolveIdempotencyKey, type IdempotencyState } from "@/lib/proofs/idempotency";
 import { createSubmissionGuard } from "@/lib/proofs/submission-guard";
+import { useIdempotentOperation } from "@/lib/proofs/use-idempotent-operation";
+import { OperationRecoveryPanel } from "@/components/common/operation-recovery-panel";
 import {
   buildMinimumIncomeProofPayload,
   DEFAULT_PROOF_EXPIRES_IN_DAYS,
@@ -41,6 +43,7 @@ import {
   clearStoredSession,
   type SessionUser,
 } from "@/lib/session";
+import { useAnnounce } from "@/lib/a11y/announcer-context";
 
 type PendingChallenge = {
   id: string;
@@ -81,6 +84,7 @@ type ProofResponse = {
 
 export function CreateProofFlow() {
   const { isRedacted } = usePrivacy();
+  const { announce } = useAnnounce();
   const initialSession = useMemo(() => readStoredSession(), []);
   
   // Load saved draft on mount (only non-secret fields)
@@ -116,6 +120,13 @@ export function CreateProofFlow() {
   const submissionGuardRef = useRef(createSubmissionGuard());
   const idempotencyRef = useRef<IdempotencyState | null>(null);
   const reviewGate = useProofReviewGate<MinimumIncomeProofPayload>();
+  // #254: tracks a persisted idempotency key + recovery status for this
+  // proof-creation attempt, scoped to the authenticated user (there is no
+  // org-level tenant on SessionUser; the wallet-authenticated user is the
+  // isolation boundary this flow has). Survives a page reload after a
+  // client-side timeout, unlike submissionGuardRef/idempotencyRef above
+  // (which only guard duplicate-fire within one component lifetime).
+  const operation = useIdempotentOperation(user?.id ?? "anonymous", "proof-issuance");
 
   useEffect(() => {
     if (error) {
@@ -420,6 +431,7 @@ export function CreateProofFlow() {
     setError(null);
     setProof(null);
     setStatus("Creating signed minimum-income proof...");
+    announce("Creating signed minimum-income proof.", { source: "proof-submission" });
 
     // A retry of the same intent (same selection, threshold, and period)
     // reuses the previous idempotency key; anything else mints a new one.
@@ -434,6 +446,11 @@ export function CreateProofFlow() {
     };
     const idempotency = resolveIdempotencyKey(idempotencyRef.current, intent);
     idempotencyRef.current = idempotency;
+    // #254: a persisted, cross-reload record of this same intent. If the
+    // request below times out client-side, this record (and its key)
+    // survive so a later "resume" can check what actually happened instead
+    // of silently retrying with a fresh key.
+    operation.begin(intent);
 
     try {
       const created = await apiClient<ProofResponse>({
@@ -453,22 +470,63 @@ export function CreateProofFlow() {
 
       setProof(created);
       setStatus("Proof created.");
+      // Deliberately does not include the proof id or credential hash: the
+      // coordinator scrubs recognizable sensitive shapes defensively (see
+      // lib/telemetry/redact.ts), but a status message should never depend
+      // on that safety net to begin with (#252's "no secrets in
+      // announcements" acceptance criterion).
+      announce("Proof created.", { source: "proof-submission" });
       // The intent this key covered has now succeeded; a future click,
       // even with identical field values, is a new intent and should get
       // its own key rather than silently reusing a completed one.
       idempotencyRef.current = null;
+      operation.markSucceeded();
+      operation.reset();
       reviewGate.reset();
       // Clear draft after successful proof creation
       deleteProofDraft('minimum-income');
-    } catch {
+    } catch (submitError) {
       if (!submissionGuardRef.current.isCurrent(submissionId)) {
         return;
       }
       setStatus(null);
-      setError("Proof creation failed. Check the selected payments and try again.");
+      // A client-side abort (request timeout, most likely) means the
+      // server may have already accepted this proof before the response
+      // was lost — that's the "unresolved" case #254 targets, so the
+      // recovery panel (which polls rather than guessing) is offered
+      // instead of a flat failure message. Any other error (validation,
+      // auth, 5xx) is a real, observed failure and is safe to label as such.
+      const isAbort = submitError instanceof DOMException && submitError.name === "AbortError";
+      if (isAbort) {
+        const message = "Proof creation timed out. We can't confirm whether it went through.";
+        setError(message);
+        announce(message, { politeness: "assertive", source: "proof-submission" });
+      } else {
+        operation.markFailed();
+        const message = "Proof creation failed. Check the selected payments and try again.";
+        setError(message);
+        announce(message, { politeness: "assertive", source: "proof-submission" });
+      }
     } finally {
       submissionGuardRef.current.end(submissionId);
       setIsSubmittingProof(false);
+    }
+  }
+
+  // #254 recovery actions. "Resume" polls the bounded status endpoint for
+  // the existing record rather than resubmitting; "retry" resubmits using
+  // the SAME payload/idempotency key currently held by operation/idempotencyRef
+  // (resolveIdempotencyKey already guarantees that reuse for an unchanged
+  // intent), so a retry after a timeout can never mint a second key for
+  // what might still be the original in-flight request.
+  async function resumeProofOperation() {
+    if (!token) return;
+    await operation.resume(token);
+  }
+
+  function retryProofSubmission() {
+    if (reviewGate.reviewedPayload) {
+      void submitProof(reviewGate.reviewedPayload);
     }
   }
 
@@ -478,8 +536,12 @@ export function CreateProofFlow() {
     // its eventual response can't resurrect proof/error state for a user
     // who has moved on, and so a fresh submit isn't stuck waiting on a
     // request that may never resolve.
+    if (isSubmittingProof) {
+      announce("Proof submission cancelled.", { source: "proof-submission" });
+    }
     submissionGuardRef.current.invalidate();
     idempotencyRef.current = null;
+    operation.reset();
     setIsSubmittingProof(false);
     clearStoredSession();
     setToken(null);
@@ -704,6 +766,18 @@ export function CreateProofFlow() {
             >
               {error}
             </p>
+          ) : null}
+          {operation.record && operation.outcome && operation.outcome !== "succeeded" ? (
+            <div className="mt-4">
+              <OperationRecoveryPanel
+                disableRetry={isSubmittingProof}
+                idempotencyKey={operation.record.idempotencyKey}
+                isPolling={operation.isPolling}
+                onResume={resumeProofOperation}
+                onRetry={retryProofSubmission}
+                outcome={operation.outcome}
+              />
+            </div>
           ) : null}
           {proof ? (
             <div className="mt-4 grid gap-2 text-slate-300">

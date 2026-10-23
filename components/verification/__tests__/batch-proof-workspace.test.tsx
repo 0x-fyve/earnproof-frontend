@@ -139,3 +139,100 @@ describe("BatchProofWorkspace", () => {
     expect(screen.queryByText("Batch (1)")).not.toBeInTheDocument();
   });
 });
+
+describe("BatchProofWorkspace completion summary (#324)", () => {
+  beforeEach(() => {
+    mockedApiClient.mockReset();
+    mockedDownloadTextFile.mockReset();
+  });
+
+  it("shows a success summary when every item verifies", async () => {
+    mockedApiClient.mockResolvedValue({ result: "VALID", status: "valid" });
+
+    render(<BatchProofWorkspace />);
+    fireEvent.change(screen.getByLabelText("Proof identifiers"), { target: { value: "proof-1\nproof-2" } });
+    fireEvent.click(screen.getByRole("button", { name: /Preview/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Verify all/i }));
+
+    await waitFor(() => expect(screen.getByRole("status")).toBeInTheDocument());
+    expect(screen.getByRole("status")).toHaveTextContent(/all 2 items verified successfully/i);
+  });
+
+  it("never summarizes a partial failure as complete success", async () => {
+    mockedApiClient
+      .mockRejectedValueOnce(new Error("network error"))
+      .mockResolvedValueOnce({ result: "VALID", status: "valid" });
+
+    render(<BatchProofWorkspace />);
+    fireEvent.change(screen.getByLabelText("Proof identifiers"), { target: { value: "proof-fail\nproof-ok" } });
+    fireEvent.click(screen.getByRole("button", { name: /Preview/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Verify all/i }));
+
+    await waitFor(() => expect(screen.getByRole("status")).toBeInTheDocument());
+    const summary = screen.getByRole("status");
+    expect(summary).toHaveTextContent(/finished with errors/i);
+    expect(summary).toHaveTextContent(/1 verified, 1 failed/i);
+    expect(summary).not.toHaveTextContent(/successfully/i);
+  });
+
+  it("does not show a summary after a cancelled run", async () => {
+    let rejectLookup!: (reason: unknown) => void;
+    mockedApiClient.mockReturnValue(
+      new Promise((_, reject) => {
+        rejectLookup = reject;
+      }),
+    );
+
+    render(<BatchProofWorkspace />);
+    fireEvent.change(screen.getByLabelText("Proof identifiers"), { target: { value: "proof-1" } });
+    fireEvent.click(screen.getByRole("button", { name: /Preview/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Verify all/i }));
+
+    await waitFor(() => expect(screen.getAllByText("Verifying...").length).toBeGreaterThan(1));
+    fireEvent.click(screen.getByRole("button", { name: /^Cancel$/i }));
+    rejectLookup(new DOMException("Aborted", "AbortError"));
+
+    await waitFor(() => expect(screen.getByText("Cancelled")).toBeInTheDocument());
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("lets a user retry only the failed items, leaving verified items untouched", async () => {
+    mockedApiClient
+      .mockRejectedValueOnce(new Error("network error"))
+      .mockResolvedValueOnce({ result: "VALID", status: "valid" });
+
+    render(<BatchProofWorkspace />);
+    fireEvent.change(screen.getByLabelText("Proof identifiers"), { target: { value: "proof-fail\nproof-ok" } });
+    fireEvent.click(screen.getByRole("button", { name: /Preview/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Verify all/i }));
+
+    await waitFor(() => expect(screen.getByText("Failed")).toBeInTheDocument());
+
+    mockedApiClient.mockReset();
+    mockedApiClient.mockResolvedValue({ result: "VALID", status: "valid" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Retry 1 failed item/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Verify all/i }));
+
+    await waitFor(() => expect(screen.getAllByText("Verified")).toHaveLength(2));
+    expect(screen.queryByText("Failed")).not.toBeInTheDocument();
+  });
+
+  it("enforces the batch size cap at submission time, not only at preview time", async () => {
+    mockedApiClient.mockResolvedValue({ result: "VALID", status: "valid" });
+    const lines = Array.from({ length: 60 }, (_, i) => `proof-${i}`).join("\n");
+
+    render(<BatchProofWorkspace />);
+    fireEvent.change(screen.getByLabelText("Proof identifiers"), { target: { value: lines } });
+    fireEvent.click(screen.getByRole("button", { name: /Preview/i }));
+    expect(screen.getByText("Batch (50)")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Verify all/i }));
+
+    await waitFor(() => expect(screen.getByRole("status")).toBeInTheDocument());
+    // The preview already caps at 50 (asserted above); this confirms the
+    // submission path itself never calls the API more than MAX_BATCH_ITEMS
+    // times, independent of how many items happened to be in preview.
+    expect(mockedApiClient).toHaveBeenCalledTimes(50);
+  });
+});

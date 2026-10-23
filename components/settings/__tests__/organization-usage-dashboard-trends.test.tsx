@@ -12,6 +12,7 @@ import {
   staleTrendData,
   quickExhaustionForecast,
 } from "@/lib/api/__tests__/organization-usage.fixtures";
+import { storeSession, clearStoredSession } from "@/lib/session";
 
 jest.mock("@/lib/api/client", () => ({
   apiClient: jest.fn(),
@@ -22,14 +23,10 @@ jest.mock("@/lib/api/client", () => ({
 
 const mockedApiClient = apiClient as jest.MockedFunction<typeof apiClient>;
 
-const SESSION_KEY = "earnproof.session";
 const ORG = { id: "org-1", name: "Acme", slug: "acme", status: "ACTIVE" as const };
 
 function setSession(role = "ADMIN") {
-  window.localStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify({ token: "test-token", user: { id: "user-1", role } })
-  );
+  storeSession({ token: "test-token", user: { id: "user-1", role } });
 }
 
 describe("OrganizationUsageDashboard - Trends and Forecasts", () => {
@@ -39,7 +36,7 @@ describe("OrganizationUsageDashboard - Trends and Forecasts", () => {
   });
 
   afterEach(() => {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession();
   });
 
   it("renders tabs for Current Usage, Trends, and Forecasts", async () => {
@@ -330,7 +327,7 @@ describe("OrganizationUsageDashboard - Trends and Forecasts", () => {
   });
 
   it("requires authentication", () => {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession();
     render(<OrganizationUsageDashboard />);
     expect(screen.getByText("Authentication Required")).toBeInTheDocument();
   });

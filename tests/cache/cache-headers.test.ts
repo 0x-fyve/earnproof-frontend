@@ -59,9 +59,12 @@ describe("cacheHeaderRules", () => {
     ["/privacy", "public, max-age=0, must-revalidate"],
     ["/developers", "public, max-age=0, must-revalidate"],
     ["/issuers", "public, max-age=0, must-revalidate"],
-  ])("serves public static route %s as revalidate-on-use, not no-store", (pathname, expected) => {
-    expect(cacheControlFor(pathname)).toBe(expected);
-  });
+  ])(
+    "serves public static route %s as revalidate-on-use, not no-store",
+    (pathname, expected) => {
+      expect(cacheControlFor(pathname)).toBe(expected);
+    },
+  );
 
   it("never lets a public-static rule apply no-store", () => {
     for (const pathname of ["/", "/how-it-works", "/developers"]) {
@@ -69,9 +72,12 @@ describe("cacheHeaderRules", () => {
     }
   });
 
-  it.each(["/status"])("marks the health surface %s as no-store", (pathname) => {
-    expect(cacheControlFor(pathname)).toBe("no-store, private");
-  });
+  it.each(["/status"])(
+    "marks the health surface %s as no-store",
+    (pathname) => {
+      expect(cacheControlFor(pathname)).toBe("no-store, private");
+    },
+  );
 
   it.each(["/verify", "/verify/credential", "/verify/scan"])(
     "marks the verification route %s as no-store",
@@ -80,12 +86,21 @@ describe("cacheHeaderRules", () => {
     },
   );
 
-  it.each(["/proofs"])(
+  it.each(["/proofs", "/settings"])(
     "marks the authenticated route %s as no-store",
     (pathname) => {
       expect(cacheControlFor(pathname)).toBe("no-store, private");
     },
   );
+
+  it.each([
+    "/settings/security",
+    "/settings/payments",
+    "/settings/sessions",
+    "/settings/audit",
+  ])("marks the nested settings route %s as no-store", (pathname) => {
+    expect(cacheControlFor(pathname)).toBe("no-store, private");
+  });
 
   it("resolves the last matching rule, so overrides always win over the public default", () => {
     const rules = cacheHeaderRules();

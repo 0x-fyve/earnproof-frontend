@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { CreateProofFlow } from "@/components/proofs/create-proof-flow";
 import { apiClient } from "@/lib/api/client";
 import { getAddress, requestAccess, signMessage } from "@stellar/freighter-api";
+import { LEGACY_SESSION_KEY, readStoredSession, resetSessionForTests, storeSession, type Session } from "@/lib/session";
 
 jest.mock("@/lib/api/client", () => ({
   apiClient: jest.fn(),
@@ -24,16 +25,15 @@ const mockedGetAddress = getAddress as jest.MockedFunction<typeof getAddress>;
 const mockedRequestAccess = requestAccess as jest.MockedFunction<typeof requestAccess>;
 const mockedSignMessage = signMessage as jest.MockedFunction<typeof signMessage>;
 
-const SESSION_KEY = "earnproof.session";
 const WALLET_ADDRESS = "GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUV";
 const SESSION_TOKEN = "integration-session-token.do-not-log";
-const SESSION = {
+const SESSION: Session = {
   token: SESSION_TOKEN,
   user: {
     id: "user_auth_1",
     walletAddress: WALLET_ADDRESS,
     walletHash: "wallet_hash_1",
-    role: "worker",
+    role: "WORKER",
   },
 };
 
@@ -99,7 +99,10 @@ describe("CreateProofFlow wallet authentication", () => {
       expect.objectContaining({ address: WALLET_ADDRESS }),
     );
     expect(mockedApiClient).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(window.localStorage.getItem(SESSION_KEY) ?? "null")).toEqual(SESSION);
+    expect(readStoredSession()).toEqual(SESSION);
+    expect(window.localStorage.getItem(LEGACY_SESSION_KEY)).toBeNull();
+    expect(JSON.stringify({ ...window.localStorage })).not.toContain(SESSION_TOKEN);
+    expect(JSON.stringify({ ...window.sessionStorage })).not.toContain(SESSION_TOKEN);
   });
 
   it("does not sign or verify when the consent screen is cancelled", async () => {
@@ -115,7 +118,7 @@ describe("CreateProofFlow wallet authentication", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(mockedSignMessage).not.toHaveBeenCalled();
     expect(mockedApiClient).toHaveBeenCalledTimes(1); // only /auth/challenge
-    expect(window.localStorage.getItem(SESSION_KEY)).toBeNull();
+    expect(readStoredSession()).toBeNull();
   });
 
   it("falls back to getAddress when requestAccess returns no address", async () => {
@@ -143,7 +146,7 @@ describe("CreateProofFlow wallet authentication", () => {
     expect(
       await screen.findByText("Freighter was not found or did not return a Stellar address."),
     ).toHaveAttribute("role", "alert");
-    expect(window.localStorage.getItem(SESSION_KEY)).toBeNull();
+    expect(readStoredSession()).toBeNull();
     expect(mockedApiClient).not.toHaveBeenCalled();
   });
 });
@@ -178,8 +181,8 @@ describe("CreateProofFlow wallet consent", () => {
 });
 
 describe("CreateProofFlow session lifecycle", () => {
-  it("restores the persisted session after a page refresh without reconnecting", () => {
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(SESSION));
+  it("keeps the in-memory session across remounts without reconnecting", () => {
+    storeSession(SESSION);
 
     const firstRender = render(<CreateProofFlow />);
     expect(screen.getByText(WALLET_ADDRESS)).toBeInTheDocument();
@@ -191,8 +194,21 @@ describe("CreateProofFlow session lifecycle", () => {
     expect(mockedApiClient).not.toHaveBeenCalled();
   });
 
-  it("invalidates local storage on logout and restores focus to Connect Freighter", async () => {
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(SESSION));
+  it("requires a fresh sign-in after a real page reload because nothing is persisted", () => {
+    storeSession(SESSION);
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+
+    // A reload drops module state; emulate it by resetting the in-memory store.
+    resetSessionForTests();
+    render(<CreateProofFlow />);
+
+    expect(screen.getByRole("button", { name: "Connect Freighter" })).toBeInTheDocument();
+    expect(screen.queryByText(WALLET_ADDRESS)).not.toBeInTheDocument();
+  });
+
+  it("clears the session on logout and restores focus to Connect Freighter", async () => {
+    storeSession(SESSION);
     const user = userEvent.setup();
     render(<CreateProofFlow />);
 
@@ -202,17 +218,27 @@ describe("CreateProofFlow session lifecycle", () => {
 
     const connect = screen.getByRole("button", { name: "Connect Freighter" });
     await waitFor(() => expect(connect).toHaveFocus());
-    expect(window.localStorage.getItem(SESSION_KEY)).toBeNull();
+    expect(readStoredSession()).toBeNull();
     expect(screen.queryByText(WALLET_ADDRESS)).not.toBeInTheDocument();
   });
 
-  it("removes an invalid serialized session instead of exposing partial auth state", () => {
-    window.localStorage.setItem(SESSION_KEY, "{invalid-json");
+  it("ignores and deletes a legacy persisted session instead of trusting it", () => {
+    window.localStorage.setItem(LEGACY_SESSION_KEY, JSON.stringify(SESSION));
 
     render(<CreateProofFlow />);
 
     expect(screen.getByRole("button", { name: "Connect Freighter" })).toBeInTheDocument();
-    expect(window.localStorage.getItem(SESSION_KEY)).toBeNull();
+    expect(screen.queryByText(WALLET_ADDRESS)).not.toBeInTheDocument();
+    expect(window.localStorage.getItem(LEGACY_SESSION_KEY)).toBeNull();
+  });
+
+  it("deletes a malformed legacy entry instead of exposing partial auth state", () => {
+    window.localStorage.setItem(LEGACY_SESSION_KEY, "{invalid-json");
+
+    render(<CreateProofFlow />);
+
+    expect(screen.getByRole("button", { name: "Connect Freighter" })).toBeInTheDocument();
+    expect(window.localStorage.getItem(LEGACY_SESSION_KEY)).toBeNull();
   });
 
   it("does not expose the session token through console output or global state", async () => {
@@ -232,7 +258,7 @@ describe("CreateProofFlow session lifecycle", () => {
     for (const spy of [log, info, warn, error]) {
       expect(JSON.stringify(spy.mock.calls)).not.toContain(SESSION_TOKEN);
     }
-    expect((globalThis as Record<string, unknown>)[SESSION_KEY]).toBeUndefined();
+    expect((globalThis as Record<string, unknown>)[LEGACY_SESSION_KEY]).toBeUndefined();
     expect((globalThis as Record<string, unknown>).earnproofSession).toBeUndefined();
   });
 });

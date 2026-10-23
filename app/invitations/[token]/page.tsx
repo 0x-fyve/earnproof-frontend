@@ -8,6 +8,19 @@ import { InvitationAcceptance } from "@/components/organizations/invitation-acce
 import { OrganizationContextProvider } from "@/lib/organization-context/context";
 import { readStoredOrganizationId } from "@/lib/organization-context/store";
 
+// #332: overrides the app-root default's cache setting — this page is
+// public (reachable by someone with the invite link who isn't a member of
+// any org yet, and may not have a prior session at all; the [token]
+// segment itself is the authorization mechanism, verified server-side by
+// InvitationAcceptance), but must never be cached since the response
+// content is scoped to one specific token.
+export const routeAuth = {
+  access: "public",
+  role: null,
+  capability: null,
+  cache: "no-store",
+};
+
 export default function InvitationPage() {
   const params = useParams<{ token: string }>();
   const initialOrganizationId = readStoredOrganizationId();

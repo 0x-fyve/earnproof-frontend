@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { EmployerPaymentProofWizard } from "../employer-payment-proof-wizard";
 import { apiClient } from "@/lib/api/client";
 import type { Payment } from "@/lib/api/employer-payment-proofs";
+import { storeSession, clearStoredSession } from "@/lib/session";
 
 jest.mock("@/lib/api/client", () => ({
   apiClient: jest.fn(),
@@ -17,7 +18,6 @@ jest.mock("@/lib/api/client", () => ({
 
 const mockedApiClient = apiClient as jest.MockedFunction<typeof apiClient>;
 
-const SESSION_KEY = "earnproof.session";
 const SESSION = {
   token: "test-token",
   user: {
@@ -94,11 +94,11 @@ async function goToSourceStep(user: ReturnType<typeof userEvent.setup>) {
 describe("EmployerPaymentProofWizard", () => {
   beforeEach(() => {
     mockedApiClient.mockReset();
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(SESSION));
+    storeSession(SESSION);
   });
 
   afterEach(() => {
-    window.localStorage.removeItem(SESSION_KEY);
+    clearStoredSession();
   });
 
   it("no-match: explains when no trusted source is found for the period", async () => {
