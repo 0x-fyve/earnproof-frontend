@@ -23,29 +23,12 @@ import { formatDate, formatDateTime, formatMessage } from "@/lib/i18n";
 import { CapacityTrendChart } from "@/components/charts/capacity-trend-chart";
 import { CapacityForecastChart } from "@/components/charts/capacity-forecast-chart";
 import type { Organization } from "@/lib/api/generated/v1";
-
-const SESSION_KEY = "earnproof.session";
+import { readStoredSession } from "@/lib/session";
 
 type SessionData = {
   token: string;
   user: { id: string; role: string };
 };
-
-function readStoredSession(): SessionData | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  const stored = window.localStorage.getItem(SESSION_KEY);
-  if (!stored) {
-    return null;
-  }
-  try {
-    return JSON.parse(stored) as SessionData;
-  } catch {
-    window.localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-}
 
 /** How stale is "stale"? Usage data older than this is flagged in the UI. */
 const STALE_AFTER_MS = 5 * 60 * 1000;

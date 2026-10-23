@@ -7,6 +7,7 @@ import {
   type NetworkFailureType,
   classifyNetworkFailure,
 } from "./error-types";
+import { parseRetryAfterMs } from "./retry-after";
 
 /**
  * Extended error class for API failures.
@@ -42,6 +43,27 @@ export class ApiNetworkError extends Error {
 
   get statusCode(): number | undefined {
     return this.failure.statusCode;
+  }
+
+  /**
+   * The server's `Retry-After` header, parsed into milliseconds from now
+   * (capped — see lib/network/retry-after.ts's `MAX_RETRY_AFTER_MS`), or
+   * `null` when the response carried no such header (or none at all).
+   * UI surfaces this as retry countdown metadata rather than guessing a
+   * delay of its own.
+   */
+  get retryAfterMs(): number | null {
+    // `response` is typed as `Response` but, in practice (and in this
+    // file's own test suite), callers sometimes pass a plain
+    // `{ status: number }` object rather than a real Fetch `Response` —
+    // classifyNetworkFailure() only ever reads `.status`, so that was
+    // never a problem before this getter existed. Guard defensively
+    // rather than assuming `.headers` exists.
+    const headers = this.response?.headers;
+    if (!headers || typeof headers.get !== "function") {
+      return null;
+    }
+    return parseRetryAfterMs(headers.get("Retry-After"));
   }
 
   /**

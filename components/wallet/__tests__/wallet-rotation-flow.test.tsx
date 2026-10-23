@@ -3,6 +3,7 @@ import { WalletRotationFlow } from "../wallet-rotation-flow";
 import { connectFreighterWallet, signFreighterMessage } from "@/lib/wallet/freighter-sign";
 import { createAuthChallenge, verifyAuthChallenge } from "@/lib/api/auth";
 import { completeWalletRotation } from "@/lib/wallet-rotation/store";
+import { readStoredSession, storeSession } from "@/lib/session";
 
 jest.mock("@/lib/wallet/freighter-sign", () => ({
   connectFreighterWallet: jest.fn(),
@@ -145,7 +146,11 @@ describe("WalletRotationFlow", () => {
   });
 
   it("completes a full rotation end to end and clears the session", async () => {
-    window.localStorage.setItem("earnproof.session", JSON.stringify({ token: "old" }));
+    storeSession({
+      token: "old",
+      user: { id: "u1", walletAddress: CURRENT_WALLET, walletHash: "h1", role: "WORKER" },
+    });
+    expect(readStoredSession()).not.toBeNull();
 
     mockConnect.mockResolvedValueOnce(CURRENT_WALLET);
     mockCreateChallenge.mockResolvedValueOnce(futureChallenge("c1"));
@@ -169,7 +174,7 @@ describe("WalletRotationFlow", () => {
     await waitFor(() => {
       expect(onCompleted).toHaveBeenCalledWith(REPLACEMENT_WALLET);
     });
-    expect(window.localStorage.getItem("earnproof.session")).toBeNull();
+    expect(readStoredSession()).toBeNull();
     expect(screen.getByText("Wallet Rotated")).toBeInTheDocument();
   });
 

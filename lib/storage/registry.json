@@ -1,0 +1,367 @@
+{
+  "$comment": "Single source of truth for browser persistence. Checked by scripts/storage-schema-audit.js (run by npm run validate:production) and tests/storage. See docs/storage-schema-validation.md.",
+  "registryVersion": 1,
+  "entries": [
+    {
+      "id": "FORM_DRAFTS",
+      "key": "earnproof.form-drafts",
+      "match": "exact",
+      "area": "local",
+      "scope": "browser",
+      "classification": "draft",
+      "format": "envelope",
+      "schemaVersion": 1,
+      "owner": "lib/storage/index.ts",
+      "accessors": [
+        "lib/storage/index.ts"
+      ],
+      "retention": "Kept until the form is submitted or the draft is discarded.",
+      "cleanup": "Removed by clearAllStorage() on logout, account change and 401, and by the form on submit.",
+      "description": "Non-secret in-progress form values keyed by form id.",
+      "viaDriver": true
+    },
+    {
+      "id": "DISPLAY_PREFERENCES",
+      "key": "earnproof.display-preferences",
+      "match": "exact",
+      "area": "local",
+      "scope": "browser",
+      "classification": "preference",
+      "format": "envelope",
+      "schemaVersion": 1,
+      "owner": "lib/storage/index.ts",
+      "accessors": [
+        "lib/storage/index.ts",
+        "app/layout.tsx"
+      ],
+      "retention": "Kept until the user resets it; browser-scoped.",
+      "cleanup": "Removed by clearAllStorage(); invalid or unknown-version values are discarded on read.",
+      "description": "Reduced-motion and high-contrast choices. app/layout.tsx reads it in a pre-hydration inline script and never writes it.",
+      "viaDriver": true
+    },
+    {
+      "id": "PROOF_DRAFTS",
+      "key": "earnproof.proof-drafts",
+      "match": "exact",
+      "area": "local",
+      "scope": "browser",
+      "classification": "draft",
+      "format": "envelope",
+      "schemaVersion": 1,
+      "owner": "lib/storage/proof-drafts.ts",
+      "accessors": [
+        "lib/storage/index.ts"
+      ],
+      "retention": "7 days from last save (expiresAt on each draft).",
+      "cleanup": "Expired drafts are dropped on read; removed by clearAllStorage() and clearAllProofDrafts().",
+      "description": "Non-secret proof wizard field values. Signatures, tokens and proof artifacts are never stored.",
+      "viaDriver": true
+    },
+    {
+      "id": "LOCALE_PREFERENCE",
+      "key": "earnproof.preferences.locale",
+      "match": "exact",
+      "area": "local",
+      "scope": "browser",
+      "classification": "preference",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/i18n/preferences.ts",
+      "accessors": [
+        "lib/i18n/preferences.ts"
+      ],
+      "retention": "Kept until the user resets it.",
+      "cleanup": "Invalid values resolve to the default locale on read; removed when the user resets the preference.",
+      "description": "Chosen locale string."
+    },
+    {
+      "id": "TIME_ZONE_PREFERENCE",
+      "key": "earnproof.preferences.timeZone",
+      "match": "exact",
+      "area": "local",
+      "scope": "browser",
+      "classification": "preference",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/i18n/preferences.ts",
+      "accessors": [
+        "lib/i18n/preferences.ts"
+      ],
+      "retention": "Kept until the user resets it.",
+      "cleanup": "Invalid values resolve to the default time zone on read; removed when the user resets the preference.",
+      "description": "Chosen IANA time zone."
+    },
+    {
+      "id": "CURRENT_ORGANIZATION",
+      "key": "earnproof.current-organization-id",
+      "match": "exact",
+      "area": "local",
+      "scope": "browser",
+      "classification": "ui-state",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/organization-context/store.ts",
+      "accessors": [
+        "lib/organization-context/store.ts"
+      ],
+      "retention": "Kept until the user switches organization or signs out.",
+      "cleanup": "clearStoredOrganizationId() on organization removal.",
+      "description": "Id of the organization the UI is scoped to. An id only, no organization data."
+    },
+    {
+      "id": "CAPABILITY_CACHE",
+      "key": "earnproof_capabilities",
+      "match": "exact",
+      "area": "local",
+      "scope": "browser",
+      "classification": "cache",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/api/capability-cache.ts",
+      "accessors": [
+        "lib/api/capability-cache.ts"
+      ],
+      "retention": "5 minutes (CAPABILITY_CACHE_TTL_MS).",
+      "cleanup": "Discarded on TTL expiry, malformed data, or a deployment identity change.",
+      "description": "UX-only copy of the server capability document. Never an authorization source."
+    },
+    {
+      "id": "WALLET_ROTATIONS",
+      "key": "earnproof.wallet-rotations",
+      "match": "exact",
+      "area": "local",
+      "scope": "browser",
+      "classification": "user-record",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/wallet-rotation/store.ts",
+      "accessors": [
+        "lib/wallet-rotation/store.ts"
+      ],
+      "retention": "Kept as a local audit trail until browser data is cleared.",
+      "cleanup": "Invalid shapes are discarded on read.",
+      "description": "Completed wallet rotation records (public addresses and timestamps)."
+    },
+    {
+      "id": "SUPPORTED_ASSETS",
+      "key": "earnproof.supported-assets",
+      "match": "exact",
+      "area": "local",
+      "scope": "browser",
+      "classification": "user-record",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/supported-assets/store.ts",
+      "accessors": [
+        "lib/supported-assets/store.ts"
+      ],
+      "retention": "Kept until browser data is cleared; stand-in until a backend inventory exists.",
+      "cleanup": "Invalid shapes are discarded on read.",
+      "description": "Client-local supported asset inventory."
+    },
+    {
+      "id": "TRUSTED_SOURCES",
+      "key": "earnproof.trusted-sources.",
+      "match": "prefix",
+      "area": "local",
+      "scope": "user",
+      "classification": "user-record",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/trusted-sources/store.ts",
+      "accessors": [
+        "lib/trusted-sources/store.ts"
+      ],
+      "retention": "Kept per account until the user deletes the source.",
+      "cleanup": "Invalid shapes are discarded on read; per-account key so another account never sees it.",
+      "description": "Trusted payment sources. user-scoped by account id."
+    },
+    {
+      "id": "SESSION_RECORDS",
+      "key": "earnproof.sessions.",
+      "match": "prefix",
+      "area": "local",
+      "scope": "user",
+      "classification": "user-record",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/sessions/store.ts",
+      "accessors": [
+        "lib/sessions/store.ts"
+      ],
+      "retention": "Revoked entries are listed for a short window, then dropped.",
+      "cleanup": "Invalid shapes are discarded on read. Holds device metadata only, never bearer tokens.",
+      "description": "Listing of the account's active and recently revoked sessions. user-scoped by account id."
+    },
+    {
+      "id": "INVOICE_SETTLEMENT_BINDINGS",
+      "key": "earnproof.invoice-settlement-bindings.",
+      "match": "prefix",
+      "area": "local",
+      "scope": "user",
+      "classification": "user-record",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/invoice-settlement/store.ts",
+      "accessors": [
+        "lib/invoice-settlement/store.ts"
+      ],
+      "retention": "Kept per account until browser data is cleared.",
+      "cleanup": "Invalid shapes are discarded on read.",
+      "description": "Invoice reference to payment bindings. user-scoped by account id."
+    },
+    {
+      "id": "INVOICE_SETTLEMENT_PROOFS",
+      "key": "earnproof.invoice-settlement-proofs.",
+      "match": "prefix",
+      "area": "local",
+      "scope": "user",
+      "classification": "user-record",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/invoice-settlement/store.ts",
+      "accessors": [
+        "lib/invoice-settlement/store.ts"
+      ],
+      "retention": "Each proof carries expiresAt; kept per account.",
+      "cleanup": "Invalid shapes are discarded on read.",
+      "description": "Invoice settlement proof records. user-scoped by account id."
+    },
+    {
+      "id": "PROOF_SHARE_LINKS",
+      "key": "earnproof.proof-share-links.",
+      "match": "prefix",
+      "area": "local",
+      "scope": "user",
+      "classification": "user-record",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/proof-sharing/store.ts",
+      "accessors": [
+        "lib/proof-sharing/store.ts"
+      ],
+      "retention": "Each link carries expiresAt; revoked links stay listed.",
+      "cleanup": "Invalid shapes are discarded on read. Only a digest of the share token is stored, never the token.",
+      "description": "Share link records (digest, expiry, disclosure choices). user-scoped by account id.",
+      "allowedFields": [
+        {
+          "name": "token",
+          "reason": "createShareLink returns the raw token to the caller once; only tokenHash is written to storage."
+        }
+      ]
+    },
+    {
+      "id": "PAYMENT_BACKFILL",
+      "key": "earnproof.payment-backfill.",
+      "match": "prefix",
+      "area": "local",
+      "scope": "user",
+      "classification": "user-record",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/payment-backfill/store.ts",
+      "accessors": [
+        "lib/payment-backfill/store.ts"
+      ],
+      "retention": "Kept per account until browser data is cleared.",
+      "cleanup": "Invalid shapes are discarded on read.",
+      "description": "Payment backfill job records. user-scoped by account id."
+    },
+    {
+      "id": "EMPLOYMENT_CONTINUITY",
+      "key": "earnproof.employment-continuity-proofs.",
+      "match": "prefix",
+      "area": "local",
+      "scope": "user",
+      "classification": "user-record",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/employment-continuity/store.ts",
+      "accessors": [
+        "lib/employment-continuity/store.ts"
+      ],
+      "retention": "Each proof carries expiresAt; kept per account.",
+      "cleanup": "Invalid shapes are discarded on read.",
+      "description": "Employment continuity proof records. user-scoped by account id."
+    },
+    {
+      "id": "PROOF_RENEWALS",
+      "key": "earnproof.proof-renewals.",
+      "match": "prefix",
+      "area": "local",
+      "scope": "user",
+      "classification": "user-record",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/proof-renewal/store.ts",
+      "accessors": [
+        "lib/proof-renewal/store.ts"
+      ],
+      "retention": "Kept per account until browser data is cleared.",
+      "cleanup": "Invalid shapes are discarded on read.",
+      "description": "Predecessor and successor proof links. user-scoped by account id."
+    },
+    {
+      "id": "ORGANIZATION_EXPORTS",
+      "key": "earnproof.organization-exports.",
+      "match": "prefix",
+      "area": "local",
+      "scope": "user",
+      "classification": "user-record",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/organization-archival/store.ts",
+      "accessors": [
+        "lib/organization-archival/store.ts"
+      ],
+      "retention": "Each export carries expiresAt (EXPORT_RETENTION_DAYS).",
+      "cleanup": "Invalid shapes are discarded on read.",
+      "description": "Organization export request records. user-scoped by account id."
+    },
+    {
+      "id": "ORGANIZATION_ARCHIVAL_REAUTH",
+      "key": "earnproof.organization-archival-reauth.",
+      "match": "prefix",
+      "area": "local",
+      "scope": "user",
+      "classification": "ui-state",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/organization-archival/store.ts",
+      "accessors": [
+        "lib/organization-archival/store.ts"
+      ],
+      "retention": "One ISO timestamp per account; the freshness window is enforced by the reader.",
+      "cleanup": "Overwritten on each re-authentication. Holds a timestamp only, never a credential.",
+      "description": "Time of the last re-authentication used to gate archival actions. user-scoped by account id."
+    },
+    {
+      "id": "APPROVAL_STORE",
+      "key": "earnproof:approvals:",
+      "match": "prefix",
+      "area": "local",
+      "scope": "user-organization",
+      "classification": "cache",
+      "format": "legacy-unversioned",
+      "schemaVersion": 1,
+      "owner": "lib/approvals/store.ts",
+      "accessors": [
+        "lib/approvals/store.ts"
+      ],
+      "retention": "Cached operations are refreshed from the server; kept until cleared.",
+      "cleanup": "clearOperations(); invalid shapes are discarded on read.",
+      "description": "Cached approval queue for recovery after refresh. Scoped to account and organization."
+    }
+  ],
+  "retired": [
+    {
+      "key": "earnproof.session",
+      "reason": "Bearer tokens are held in memory only (issue #305). The old entry is deleted on sight and never trusted.",
+      "removedBy": [
+        "lib/session.ts"
+      ],
+      "since": "2026-10"
+    }
+  ],
+  "otherMechanisms": []
+}

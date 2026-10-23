@@ -125,3 +125,73 @@ describe("OrganizationContextProvider / useOrganizationContext", () => {
     expect(result.current).toBeInstanceOf(Error);
   });
 });
+
+describe("OrganizationContextProvider cross-tab hooks (#274)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  function renderWithCallback(onOrganizationChanged: (id: string | null) => void, initialOrganizationId: string | null = "org-1") {
+    return renderHook(() => useOrganizationContext(), {
+      wrapper: ({ children }) => (
+        <OrganizationContextProvider initialOrganizationId={initialOrganizationId} onOrganizationChanged={onOrganizationChanged}>
+          {children}
+        </OrganizationContextProvider>
+      ),
+    });
+  }
+
+  it("notifies onOrganizationChanged after a local switch and a local clear", async () => {
+    const onChanged = jest.fn();
+    const { result } = renderWithCallback(onChanged);
+
+    await act(async () => {
+      await result.current.switchOrganization(org("ACTIVE", "org-2"));
+    });
+    act(() => {
+      result.current.clearOrganization();
+    });
+
+    expect(onChanged.mock.calls).toEqual([["org-2"], [null]]);
+  });
+
+  it("does not notify when a switch is rejected", async () => {
+    const onChanged = jest.fn();
+    const { result } = renderWithCallback(onChanged);
+    await act(async () => {
+      await expect(result.current.switchOrganization(org("SUSPENDED", "org-2"))).rejects.toThrow();
+    });
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("resetOrganizationScope drops the organization and bumps generation without touching storage or notifying", () => {
+    const onChanged = jest.fn();
+    window.localStorage.setItem("earnproof.current-organization-id", "org-other-tab");
+    const { result } = renderWithCallback(onChanged);
+    const before = result.current.generation;
+
+    act(() => {
+      result.current.resetOrganizationScope(null);
+    });
+
+    expect(result.current.organizationId).toBeNull();
+    expect(result.current.organization).toBeNull();
+    expect(result.current.generation).toBe(before + 1);
+    expect(window.localStorage.getItem("earnproof.current-organization-id")).toBe("org-other-tab");
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("resetOrganizationScope adopts a selectable organization but refuses an unselectable one", () => {
+    const { result } = renderWithCallback(jest.fn(), null);
+
+    act(() => {
+      result.current.resetOrganizationScope(org("ACTIVE", "org-2"));
+    });
+    expect(result.current.organizationId).toBe("org-2");
+
+    act(() => {
+      result.current.resetOrganizationScope(org("REVOKED", "org-3"));
+    });
+    expect(result.current.organizationId).toBeNull();
+  });
+});

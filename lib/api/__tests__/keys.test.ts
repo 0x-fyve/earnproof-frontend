@@ -2,7 +2,17 @@
  * @jest-environment jsdom
  */
 
-import { validateApiKeyName, validateApiKeyScopes, formatApiKeyPrefix } from "../keys";
+import {
+  validateApiKeyName,
+  validateApiKeyScopes,
+  formatApiKeyPrefix,
+  hasKnownCreationDate,
+  sortApiKeys,
+  filterApiKeysByCreationAvailability,
+  getApiKeys,
+} from "../keys";
+import type { ApiKey } from "../generated/v1";
+import { ApiResponseValidationError } from "@/lib/validation/runtime-response";
 
 describe("API Key Utilities", () => {
   describe("validateApiKeyName", () => {
@@ -72,6 +82,169 @@ describe("API Key Utilities", () => {
 
     it("handles edge case of exactly 8 characters", () => {
       expect(formatApiKeyPrefix("exactly8")).toBe("exactly8");
+    });
+  });
+
+  describe("hasKnownCreationDate (#323)", () => {
+    it("returns true for a valid ISO timestamp", () => {
+      expect(hasKnownCreationDate({ createdAt: "2026-01-15T09:30:00.000Z" })).toBe(true);
+    });
+
+    it("returns false when createdAt is null", () => {
+      expect(hasKnownCreationDate({ createdAt: null })).toBe(false);
+    });
+
+    it("returns false when createdAt is undefined", () => {
+      expect(hasKnownCreationDate({ createdAt: undefined })).toBe(false);
+    });
+
+    it("returns false when createdAt is an empty string", () => {
+      expect(hasKnownCreationDate({ createdAt: "" })).toBe(false);
+    });
+
+    it("fails safe (false) for an unparseable string rather than throwing", () => {
+      expect(hasKnownCreationDate({ createdAt: "not-a-date" })).toBe(false);
+    });
+  });
+
+  describe("sortApiKeys (#323)", () => {
+    const keyA: ApiKey = {
+      id: "a",
+      name: "Alpha",
+      prefix: "ep_a",
+      scopes: ["proofs:read"],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    const keyB: ApiKey = {
+      id: "b",
+      name: "Beta",
+      prefix: "ep_b",
+      scopes: ["proofs:read"],
+      createdAt: "2026-02-01T00:00:00.000Z",
+    };
+    const keyNoDate: ApiKey = {
+      id: "c",
+      name: "Zeta-no-date",
+      prefix: "ep_c",
+      scopes: ["proofs:read"],
+      createdAt: null,
+    };
+
+    it("sorts by creation date descending (newest first)", () => {
+      const result = sortApiKeys([keyA, keyB], "created-desc");
+      expect(result.map((k) => k.id)).toEqual(["b", "a"]);
+    });
+
+    it("sorts by creation date ascending (oldest first)", () => {
+      const result = sortApiKeys([keyB, keyA], "created-asc");
+      expect(result.map((k) => k.id)).toEqual(["a", "b"]);
+    });
+
+    it("always orders keys with an unknown creation date after keys with a known one, in both directions", () => {
+      const desc = sortApiKeys([keyNoDate, keyB, keyA], "created-desc");
+      expect(desc.map((k) => k.id)).toEqual(["b", "a", "c"]);
+
+      const asc = sortApiKeys([keyNoDate, keyB, keyA], "created-asc");
+      expect(asc.map((k) => k.id)).toEqual(["a", "b", "c"]);
+    });
+
+    it("sorts multiple unknown-date keys among themselves by name", () => {
+      const anotherNoDate: ApiKey = { ...keyNoDate, id: "d", name: "Aardvark-no-date" };
+      const result = sortApiKeys([keyNoDate, anotherNoDate], "created-desc");
+      expect(result.map((k) => k.id)).toEqual(["d", "c"]);
+    });
+
+    it("sorts by name ascending and descending", () => {
+      expect(sortApiKeys([keyB, keyA], "name-asc").map((k) => k.id)).toEqual(["a", "b"]);
+      expect(sortApiKeys([keyA, keyB], "name-desc").map((k) => k.id)).toEqual(["b", "a"]);
+    });
+
+    it("does not mutate the input array", () => {
+      const input = [keyB, keyA];
+      const inputCopy = [...input];
+      sortApiKeys(input, "created-asc");
+      expect(input).toEqual(inputCopy);
+    });
+  });
+
+  describe("filterApiKeysByCreationAvailability (#323)", () => {
+    const withDate: ApiKey = {
+      id: "a",
+      name: "Has Date",
+      prefix: "ep_a",
+      scopes: ["proofs:read"],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    const withoutDate: ApiKey = {
+      id: "b",
+      name: "No Date",
+      prefix: "ep_b",
+      scopes: ["proofs:read"],
+      createdAt: null,
+    };
+
+    it("returns all keys when availability is 'all'", () => {
+      expect(filterApiKeysByCreationAvailability([withDate, withoutDate], "all")).toEqual([
+        withDate,
+        withoutDate,
+      ]);
+    });
+
+    it("returns only keys with a known creation date when availability is 'known'", () => {
+      expect(filterApiKeysByCreationAvailability([withDate, withoutDate], "known")).toEqual([
+        withDate,
+      ]);
+    });
+
+    it("returns only keys with an unavailable creation date when availability is 'unavailable'", () => {
+      expect(
+        filterApiKeysByCreationAvailability([withDate, withoutDate], "unavailable"),
+      ).toEqual([withoutDate]);
+    });
+  });
+
+  describe("getApiKeys response validation (#327)", () => {
+    const originalFetch = global.fetch;
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    // A real Response (not a partial mock) so the client's bounded-read /
+    // content-type contract (#328) is exercised the same way it is in
+    // production.
+    function jsonResponse(body: unknown): Response {
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    it("resolves with the list when every item matches the ApiKey schema", async () => {
+      const apiKeys = [
+        { id: "k1", name: "Key One", prefix: "ep_1", scopes: ["proofs:read"], createdAt: null },
+      ];
+      global.fetch = jest.fn().mockResolvedValue(jsonResponse(apiKeys));
+
+      await expect(getApiKeys("token", new AbortController().signal)).resolves.toEqual(apiKeys);
+    });
+
+    it("rejects with ApiResponseValidationError when an item is missing a required field", async () => {
+      global.fetch = jest.fn().mockResolvedValue(
+        jsonResponse([{ id: "k1", scopes: ["proofs:read"] }]), // missing name, prefix
+      );
+
+      await expect(getApiKeys("token", new AbortController().signal)).rejects.toBeInstanceOf(
+        ApiResponseValidationError,
+      );
+    });
+
+    it("rejects with ApiResponseValidationError when the response is not an array at all", async () => {
+      global.fetch = jest.fn().mockResolvedValue(jsonResponse({ unexpected: "shape" }));
+
+      await expect(getApiKeys("token", new AbortController().signal)).rejects.toBeInstanceOf(
+        ApiResponseValidationError,
+      );
     });
   });
 });
